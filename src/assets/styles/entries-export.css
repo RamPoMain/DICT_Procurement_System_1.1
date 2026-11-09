@@ -1,0 +1,147 @@
+/* Export menu in the Entries top bar (Suppliers).
+   The light/dark values hang off data-theme on .db-export, which Entries sets
+   from useTheme(), so this file does not depend on any other stylesheet's variables. */
+
+.db-topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.db-export {
+  --ex-bg: #eaf1ff;
+  --ex-bg-hover: #dbe8ff;
+  --ex-border: #9dbcf7;
+  --ex-text: #2563eb;
+  --ex-menu-bg: #ffffff;
+  --ex-menu-border: #d9deea;
+  --ex-menu-hover: #f1f5ff;
+  --ex-menu-title: #1b2233;
+  --ex-menu-hint: #66708a;
+  --ex-shadow: 0 12px 28px rgba(20, 30, 60, 0.16);
+
+  position: relative;
+  display: inline-block;
+}
+
+.db-export[data-theme='dark'] {
+  --ex-bg: rgba(59, 130, 246, 0.16);
+  --ex-bg-hover: rgba(59, 130, 246, 0.26);
+  --ex-border: rgba(96, 165, 250, 0.55);
+  --ex-text: #93bbff;
+  --ex-menu-bg: #1b2233;
+  --ex-menu-border: #2f3a52;
+  --ex-menu-hover: #243049;
+  --ex-menu-title: #e7eaf3;
+  --ex-menu-hint: #9aa5bf;
+  --ex-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+
+.db-export-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--ex-border);
+  border-radius: 10px;
+  background: var(--ex-bg);
+  color: var(--ex-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.db-export-trigger:hover:not(:disabled) {
+  background: var(--ex-bg-hover);
+}
+
+.db-export-trigger:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.db-export-trigger:focus-visible,
+.db-export-item:focus-visible {
+  outline: 2px solid var(--ex-text);
+  outline-offset: 2px;
+}
+
+.db-export-caret {
+  transition: transform 0.15s ease;
+}
+
+.db-export-trigger[aria-expanded='true'] .db-export-caret {
+  transform: rotate(180deg);
+}
+
+.db-export-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 270px;
+  padding: 6px;
+  border: 1px solid var(--ex-menu-border);
+  border-radius: 12px;
+  background: var(--ex-menu-bg);
+  box-shadow: var(--ex-shadow);
+  animation: db-export-in 0.12s ease-out;
+}
+
+.db-export-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.db-export-item:hover {
+  background: var(--ex-menu-hover);
+}
+
+.db-export-item strong {
+  color: var(--ex-menu-title);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.db-export-item span {
+  color: var(--ex-menu-hint);
+  font-size: 12px;
+}
+
+@keyframes db-export-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .db-export-menu { animation: none; }
+  .db-export-trigger,
+  .db-export-caret { transition: none; }
+}
+
+@media (max-width: 640px) {
+  .db-export-menu {
+    right: auto;
+    left: 0;
+    min-width: min(270px, 86vw);
+  }
+}

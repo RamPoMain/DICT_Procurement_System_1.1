@@ -1,0 +1,1217 @@
+/* ============================================================
+   REQUEST MODAL — DARK THEME OVERRIDES
+   step1.css / step2.css / step3.css provide structure (grids,
+   positioning, the multi-select mechanics, upload zone layout).
+   Everything here only touches color so the form reads correctly
+   on the dashboard's dark background.
+   ============================================================ */
+
+/* CSS custom properties consumed by step1.css/step3.css
+   (--error-red, --text-gray, --font-family-inter) are redefined
+   here, scoped to the modal, so every rule that already references
+   them via var() picks up dark-appropriate values automatically. */
+.db-modal-overlay {
+    --error-red: #f87171;
+    --text-gray: #8b94a8;
+    --font-family-inter: 'Inter', 'Roboto', sans-serif;
+}
+
+/* ---------------- Overlay / panel chrome ---------------- */
+
+.db-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 8, 20, 0.65);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.db-modal-overlay.hidden { display: none; }
+
+.db-modal {
+    position: relative;
+    width: 100%;
+    max-width: 940px;
+    background: var(--db-card, #111A2E);
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.08));
+    border-radius: 16px;
+    padding-top: 60px !important;
+    padding: 34px 38px 26px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    color: var(--db-text, #E7EAF3);
+    font-family: 'Inter', 'Roboto', sans-serif;
+    margin-bottom: 40px;
+}
+
+.choice-modal {
+    max-width: 460px !important;
+    padding: 30px 32px 30px !important; /* Increased top padding for the floating tab */
+    background-color: var(--db-card) !important;
+}
+
+.choice-overlay {
+    z-index: 2000;
+}
+
+.choice-tab { 
+    position: static !important; transform: none !important; margin-bottom: 20px !important; pointer-events: auto !important; width: 100% !important; border: 1px solid var(--border) !important; background: var(--bg-card) !important; 
+}
+
+.choice-group { 
+    margin-bottom: 22px !important; 
+}
+
+.choice-modal-content {
+    margin-top: 10px !important; /* Adjusted margin to accommodate the floating tab */
+}
+
+.choice-description {
+    color: var(--db-text-dim, #8B94A8);
+    font-size: 13.5px;
+    line-height: 1.5;
+    margin-bottom: 18px; 
+}
+
+.choice-blocked-note {
+    margin: -8px 0 14px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: var(--db-amber-soft, rgba(245, 158, 11, 0.14));
+    color: var(--db-text, #E7EAF3);
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.choice-modal select {
+    background-color: var(--db-card-alt, #0F172A) !important;
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.15)) !important;
+    color: var(--db-text) !important;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.choice-footer {
+    margin-top: 30px !important;
+    padding-top: 0 !important;
+    border-top: none !important;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.choice-footer .back-btn, 
+.choice-footer .next-btn {
+    flex: 1;
+    justify-content: center;
+    text-align: center;
+}
+
+.choice-modal .db-modal-close {
+    top: 12px !important;
+    right: 12px !important;
+}
+
+.db-modal-edit-btn,
+.db-modal-verify-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 9px;
+    font-family: 'Inter', 'Roboto', sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.db-modal-edit-btn {
+    border: 1px solid var(--db-accent, #3B82F6);
+    background: rgba(59, 130, 246, 0.10);
+    color: var(--db-accent, #3B82F6);
+}
+
+.db-modal-edit-btn:hover {
+    background: var(--db-accent, #3B82F6);
+    color: #fff;
+}
+
+/* Verify button: green "mark as completed" by default, switches to
+   amber "revert to pending" once the request is already completed. */
+.db-modal-verify-btn {
+    border: 1px solid var(--db-green, #22C55E);
+    background: rgba(34, 197, 94, 0.10);
+    color: var(--db-green, #22C55E);
+}
+
+.db-modal-verify-btn:hover {
+    background: var(--db-green, #22C55E);
+    color: #fff;
+}
+
+.db-modal-verify-btn.is-completed {
+    border-color: var(--db-amber, #F59E0B);
+    background: rgba(245, 158, 11, 0.10);
+    color: var(--db-amber, #F59E0B);
+}
+
+.db-modal-verify-btn.is-completed:hover {
+    background: var(--db-amber, #F59E0B);
+    color: #fff;
+}
+
+/* Delete-this-item button: only shown while viewing a saved item, next
+   to Edit/Verify. Danger-red to match the record-level delete action. */
+.db-modal-delete-item-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 9px;
+    font-family: 'Inter', 'Roboto', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    border: 1px solid #ef4444;
+    background: rgba(239, 68, 68, 0.10);
+    color: #ef4444;
+}
+
+.db-modal-delete-item-btn:hover {
+    background: #ef4444;
+    color: #fff;
+}
+
+.db-modal-close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    font-size: 20px;
+    line-height: 1;
+    padding: 0;
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.08));
+    background: var(--db-card-alt, #0F172A);
+    color: var(--db-text-dim, #8B94A8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+
+    z-index: 10;
+}
+
+.db-modal-close:hover {
+    color: var(--db-text, #E7EAF3);
+    border-color: var(--db-accent, #3B82F6);
+}
+
+
+.db-modal label {
+    color: var(--db-text-dim, #8B94A8);
+    font-weight: 600;
+    font-size: 12.5px;
+    display: block;
+    margin-bottom: 6px;
+}
+
+/* ---------------- Form fields ---------------- */
+
+.db-modal input[type="text"],
+.db-modal input[type="date"],
+.db-modal select,
+.db-modal textarea {
+    background: var(--db-card-alt, #0F172A);
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.25));
+    color: var(--db-text, #E7EAF3);
+    border-radius: 8px;
+    padding: 11px 14px;
+    width: 100%;
+    font-family: inherit;
+    font-size: 13.5px;
+}
+
+.db-modal input::placeholder,
+.db-modal textarea::placeholder {
+    color: var(--db-text-faint, #5B6478);
+}
+
+.db-modal input:focus,
+.db-modal select:focus,
+.db-modal textarea:focus {
+    outline: none;
+    border-color: var(--db-accent, #3B82F6);
+}
+
+/* Chevron / calendar icon assets are drawn for a light background —
+   invert them so they stay visible here. */
+.db-modal .custom-chevron {
+    filter: invert(1) brightness(1.7);
+}
+
+.db-modal .prefix {
+    color: var(--db-text-dim, #8B94A8);
+}
+
+/* Required-field / mismatch error state */
+.db-modal .error-state input,
+.db-modal .error-state select,
+.db-modal .error-state textarea {
+    background-color: rgba(248, 113, 113, 0.1) !important;
+    border-color: #f87171 !important;
+    color: var(--db-text, #E7EAF3) !important;
+}
+
+.db-modal .error-state .upload-zone,
+.db-modal .error-state .select-box {
+    background-color: rgba(248, 113, 113, 0.1) !important;
+    border-color: #f87171 !important;
+}
+
+.db-modal .mode-hint {
+    color: var(--db-text-faint, #5B6478);
+}
+
+/* Required-document hint — brighter blue badge so it stands out
+   against the dark modal background. */
+.db-modal .doc-type-hint {
+    background: rgba(59, 130, 246, 0.16);
+    color: #93C5FD;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+/* ---------------- Progress bar ---------------- */
+
+.db-modal .track-4 {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.20));
+}
+
+.db-modal .filled-5 {
+    background: var(--db-accent, #3B82F6);
+}
+
+/* ---------------- Multi-select (strategies) ---------------- */
+
+.db-modal .select-box {
+    background: var(--db-card-alt, #0F172A);
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.25));
+    color: var(--db-text, #E7EAF3);
+}
+
+.db-modal .options-list {
+    background: var(--db-card, #111A2E);
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.08));
+    color: var(--db-text, #E7EAF3);
+}
+
+.db-modal .option {
+    border-bottom: 1px solid var(--db-field-border, rgba(255,255,255,0.08));
+}
+
+.db-modal .option:hover {
+    background: var(--db-card-alt, #0F172A);
+}
+
+.db-modal .option.selected {
+    background: var(--db-accent, #3B82F6) !important;
+    color: #fff;
+}
+
+.db-modal .tag {
+    background: rgba(59, 130, 246, 0.16);
+    color: #93C5FD;
+}
+
+.db-modal .placeholder {
+    color: var(--db-text-faint, #5B6478);
+}
+
+/* ---------------- Upload zone ---------------- */
+
+.db-modal .upload-zone {
+    background-color: var(--db-card-alt, #0F172A);
+    border-color: var(--db-field-border, rgba(255,255,255,0.25));
+}
+
+.db-modal .upload-zone.drag-over {
+    background-color: rgba(59, 130, 246, 0.12);
+    border-color: var(--db-accent, #3B82F6);
+}
+
+.db-modal .upload-zone.has-file {
+    border-color: var(--db-accent, #3B82F6);
+}
+
+.db-modal .uploaded-file-item {
+    background: var(--db-card-alt, #0F172A);
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.08));
+    color: var(--db-text, #E7EAF3);
+}
+
+.db-modal .uploaded-file-size {
+    color: var(--db-text-faint, #5B6478);
+}
+
+/* ---------------- Footer buttons ---------------- */
+
+.db-modal .footer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--db-field-border, rgba(255,255,255,0.08));
+}
+
+.footer-right-actions {
+    display: flex;
+    gap: 12px; /* Space between Export and Next/Finish */
+    align-items: center;
+}
+
+.db-modal .back-btn {
+    background: transparent;
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.08));
+    color: var(--db-text-dim, #8B94A8);
+    padding: 10px 18px;
+    border-radius: 9px;
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.db-modal .back-btn:hover {
+    color: var(--db-text, #E7EAF3);
+    border-color: var(--db-accent, #3B82F6);
+}
+
+.db-modal .next-btn {
+    background: var(--db-accent, #3B82F6);
+    border: none;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 9px;
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+}
+
+.db-modal .next-btn:hover {
+    background: #2563EB;
+}
+
+/* ---------------- Toast ---------------- */
+
+.db-toast {
+    position: fixed;
+    bottom: 26px;
+    right: 26px;
+    background: var(--db-card, #111A2E);
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.08));
+    color: var(--db-text, #E7EAF3);
+    padding: 13px 20px;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    font-size: 13.5px;
+    font-weight: 500;
+    font-family: 'Inter', 'Roboto', sans-serif;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+    z-index: 1100;
+    max-width: 320px;
+}
+
+.db-toast.show { opacity: 1; transform: translateY(0); }
+
+/* ---------------- Welcome card CTA ---------------- */
+
+.db-welcome-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+}
+
+.db-cta-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--db-accent, #3B82F6);
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 13.5px;
+    font-family: 'Inter', 'Roboto', sans-serif;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.db-cta-btn:hover {
+    background: #2563EB;
+}
+
+/* ---------------- Responsive ---------------- */
+
+@media (max-width: 640px) {
+    .db-modal { padding: 26px 20px 20px; }
+    .db-modal-header-actions {
+        position: static;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0 0 14px;
+    }
+    .db-modal-close { width: 34px; height: 34px; }
+    .db-modal-edit-btn,
+    .db-modal-verify-btn,
+    .db-modal-pdf-btn,
+    .db-modal-edit-item-btn,
+    .db-modal-delete-item-btn {
+        padding: 0 12px !important;
+        font-size: 12px !important;
+        height: 34px !important;
+    }
+    .modal-item-nav-container { flex-direction: column; align-items: flex-start; }
+    .db-modal-edit-btn svg,
+    .db-modal-verify-btn svg,
+    .db-modal-delete-item-btn svg { width: 15px; height: 15px; }
+    .db-modal .footer-actions { flex-direction: column-reverse; gap: 10px; }
+    .db-modal .back-btn,
+    .db-modal .next-btn { width: 100%; text-align: center; }
+}
+
+/* Title wrapper: dark, centered, with room for an optional status
+   badge underneath (shown only in view mode — see modal-status-badge). */
+.db-modal .title-tab-wrapper {
+    top: -24px; 
+    left: 40px;
+    transform: none !important;
+    
+    position: absolute;
+    background: var(--db-card, #111A2E) !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 24px;
+    width: auto !important;
+    min-width: 200px !important;
+    padding: 12px 24px !important;
+    border-radius: 12px;
+
+
+    border: 1px solid var(--db-field-border, rgba(255,255,255,0.1)) !important;
+}
+
+.db-modal .text-9 { 
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+
+    color: var(--db-text, #E7EAF3);
+    padding-right: 30px;
+
+    font-weight: 800 !important; /* Extra bold */
+    font-size: 13px !important;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    text-align: center;
+    width: auto;
+}
+
+/* ---------------- Status badge (view mode) ---------------- */
+
+.modal-status-badge {
+    margin-top: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 13px;
+    border-radius: 999px;
+    font-family: 'Inter', 'Roboto', sans-serif;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+
+.modal-status-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.modal-status-badge.is-pending {
+    background: rgba(245, 158, 11, 0.14);
+    color: var(--db-amber, #F59E0B);
+}
+
+.modal-status-badge.is-completed {
+    background: rgba(34, 197, 94, 0.14);
+    color: var(--db-green, #22C55E);
+}
+
+
+.db-modal-header-actions {
+    position: absolute;
+    top: 18px;          /* same as .db-modal-close so the row lines up */
+    right: 66px;        /* close button (38px) + 18px edge + 10px gap */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 20;
+}
+
+.db-modal-pdf-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 38px;
+    padding: 0 18px;
+    border-radius: 9px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    border: 1px solid var(--db-accent, #3B82F6);
+    background: rgba(59, 130, 246, 0.08);
+    color: var(--db-accent, #3B82F6);
+    margin: 0 !important;
+}
+
+.db-modal-pdf-btn:hover {
+    background: var(--db-accent, #3B82F6);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    transform: translateY(-1px);
+}
+
+[data-theme="dark"] .db-modal-pdf-btn {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: #60a5fa;
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .db-modal-pdf-btn:hover {
+    background: #3B82F6;
+    color: #ffffff;
+}
+
+.db-modal .title-tab-wrapper .modal-status-badge {
+    pointer-events: none;
+}
+
+.export-app-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    border-radius: 9px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    border: 1px solid var(--db-accent, #3B82F6);
+    background: rgba(59, 130, 246, 0.08);
+    color: var(--db-accent, #3B82F6);
+    
+    /* REMOVE margin: 0 auto; if it's there */
+    margin: 0 !important; 
+}
+
+.export-app-btn:hover {
+    background: var(--db-accent, #3B82F6);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    transform: translateY(-1px);
+}
+
+[data-theme="dark"] .export-app-btn {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: #60a5fa;
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .export-app-btn:hover {
+    background: #3B82F6;
+    color: #ffffff;
+}
+
+/* ---------------- Multi-Item Navigator & Item Actions (Adaptive Light & Dark) ---------------- */
+
+.modal-item-nav-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 14px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    background: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    color: #0F172A;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+[data-theme="dark"] .modal-item-nav-container {
+    background: #0F172A !important;
+    border: 1px solid rgba(255, 255, 255, 0.10) !important;
+    color: #F8FAFC !important;
+}
+
+.modal-item-nav-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.modal-item-nav-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    border: 1px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #1E293B;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: all 0.15s ease;
+}
+
+.modal-item-nav-btn:hover:not(:disabled) {
+    border-color: #3B82F6;
+    color: #2563EB;
+    background: #EFF6FF;
+}
+
+.modal-item-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+[data-theme="dark"] .modal-item-nav-btn {
+    background: #111A2E !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
+    color: #F8FAFC !important;
+    box-shadow: none;
+}
+
+[data-theme="dark"] .modal-item-nav-btn:hover:not(:disabled) {
+    border-color: #3B82F6 !important;
+    color: #60A5FA !important;
+    background: rgba(59, 130, 246, 0.18) !important;
+}
+
+.modal-item-nav-counter {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0F172A;
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .modal-item-nav-counter {
+    color: #F8FAFC !important;
+}
+
+.modal-item-badge-carried {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: rgba(59, 130, 246, 0.12);
+    color: #1D4ED8;
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .modal-item-badge-carried {
+    background: rgba(59, 130, 246, 0.20) !important;
+    color: #60A5FA !important;
+    border-color: rgba(59, 130, 246, 0.40) !important;
+}
+
+.modal-item-badge-ref {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: #E2E8F0;
+    color: #475569;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .modal-item-badge-ref {
+    background: rgba(148, 163, 184, 0.16) !important;
+    color: #94A3B8 !important;
+}
+
+.modal-item-nav-total {
+    font-size: 12.5px;
+    color: #64748B;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
+.modal-item-nav-total strong {
+    font-weight: 700;
+    color: #0F172A;
+}
+
+[data-theme="dark"] .modal-item-nav-total {
+    color: #94A3B8 !important;
+}
+
+[data-theme="dark"] .modal-item-nav-total strong {
+    color: #F8FAFC !important;
+}
+
+.modal-item-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.modal-item-nav-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #1D4ED8;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.modal-item-nav-add-btn:hover {
+    background: #2563EB;
+    border-color: #2563EB;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+[data-theme="dark"] .modal-item-nav-add-btn {
+    background: rgba(59, 130, 246, 0.18) !important;
+    border-color: rgba(59, 130, 246, 0.45) !important;
+    color: #60A5FA !important;
+}
+
+[data-theme="dark"] .modal-item-nav-add-btn:hover {
+    background: #3B82F6 !important;
+    border-color: #3B82F6 !important;
+    color: #ffffff !important;
+}
+
+.modal-item-nav-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    background: rgba(239, 68, 68, 0.10);
+    border: 1px solid rgba(239, 68, 68, 0.30);
+    color: #DC2626;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.modal-item-nav-delete-btn:hover {
+    background: #DC2626;
+    border-color: #DC2626;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+}
+
+[data-theme="dark"] .modal-item-nav-delete-btn {
+    background: rgba(239, 68, 68, 0.16) !important;
+    border-color: rgba(239, 68, 68, 0.40) !important;
+    color: #F87171 !important;
+}
+
+[data-theme="dark"] .modal-item-nav-delete-btn:hover {
+    background: #EF4444 !important;
+    border-color: #EF4444 !important;
+    color: #ffffff !important;
+}
+
+.failed-bidding-warning-box {
+    padding: 10px 14px;
+    background: rgba(239, 68, 68, 0.10);
+    border: 1px solid rgba(239, 68, 68, 0.30);
+    color: #DC2626;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    font-size: 12.5px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+[data-theme="dark"] .failed-bidding-warning-box {
+    background: rgba(239, 68, 68, 0.16) !important;
+    color: #F87171 !important;
+}
+
+.failed-bidding-info-box {
+    padding: 10px 14px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    color: #1D4ED8;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    font-size: 12.5px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+[data-theme="dark"] .failed-bidding-info-box {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: #60A5FA !important;
+}
+
+/* ---------------- Entry reference number (Add / View Entry form only) ---------------- */
+
+.entry-ref-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: fit-content;
+    max-width: calc(100% - 40px);
+    margin: 0 auto 14px;
+    padding: 8px 14px;
+    border: 1px dashed var(--db-field-border, #C7CCDA);
+    border-radius: 10px;
+    background: var(--db-accent-soft, rgba(59, 130, 246, 0.14));
+    color: var(--db-text, #121826);
+    font-size: 12.5px;
+}
+
+.entry-ref-label {
+    color: var(--db-text-dim, #5B6478);
+    font-weight: 600;
+}
+
+.entry-ref-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    user-select: all;
+}
+
+.entry-ref-note {
+    color: var(--db-text-dim, #5B6478);
+    font-size: 11.5px;
+}
+
+.entry-ref-copy {
+    padding: 3px 10px;
+    border: 1px solid var(--db-accent, #3B82F6);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--db-accent, #3B82F6);
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.entry-ref-copy:hover {
+    background: var(--db-accent, #3B82F6);
+    color: #fff;
+}
+
+.entry-ref-copy:focus-visible {
+    outline: 2px solid var(--db-accent, #3B82F6);
+    outline-offset: 2px;
+}
+
+/* =========================================
+   DARK MODE - MODAL HIGH CONTRAST FIX
+   ========================================= */
+
+/* 1. Force the Modal Background */
+[data-theme="dark"] #requestModalOverlay .db-modal {
+    background-color: #111A2E !important; /* Deep navy from your reference */
+}
+
+/* 2. Fix All Labels (PPMP Number, Fiscal Year, etc) */
+[data-theme="dark"] #requestModalOverlay .field-group label {
+    color: #94A3B8 !important; /* Muted blue-gray for labels */
+    opacity: 1 !important;
+}
+
+/* 3. Fix All Input Fields, Selects, and Textareas */
+[data-theme="dark"] #requestModalOverlay input,
+[data-theme="dark"] #requestModalOverlay select,
+[data-theme="dark"] #requestModalOverlay textarea,
+[data-theme="dark"] #requestModalOverlay .select-box {
+    background-color: #0D1424 !important; /* Darker navy for input wells */
+    color: #F8FAFC !important;           /* Bright white text for the values */
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+
+/* 4. Fix Placeholder Text visibility */
+[data-theme="dark"] #requestModalOverlay input::placeholder,
+[data-theme="dark"] #requestModalOverlay textarea::placeholder,
+[data-theme="dark"] #requestModalOverlay .placeholder {
+    color: #475569 !important; /* Visible gray for placeholders */
+}
+
+/* 5. Fix read-only fields (PPMP No., and Fiscal Year when adding to an existing PPMP) */
+[data-theme="dark"] #requestModalOverlay input[readonly] {
+    color: #F8FAFC !important;
+    background-color: #0D1424 !important;
+    opacity: 1 !important; /* Remove any transparency */
+}
+
+/* 6. Fix Chevron/Arrow Icons */
+[data-theme="dark"] #requestModalOverlay .custom-chevron {
+    filter: invert(1) brightness(2); /* Makes dark icons white */
+}
+
+/* 7. Progress Bar background track */
+[data-theme="dark"] #requestModalOverlay .track-4 {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+}
+
+/* 8. Fix hint text (below Mode of Procurement) */
+[data-theme="dark"] #requestModalOverlay .mode-hint {
+    color: #64748B !important;
+}
+
+/* 9. Modal Header Title */
+[data-theme="dark"] #requestModalOverlay #page-title {
+    color: #F8FAFC !important;
+}
+
+/* =========================================
+   REQUEST FORM (React) - layout, steps 1-3
+   ========================================= */
+
+/* Two-column step 1 layout */
+.db-modal .form-col { display: flex; flex-direction: column; min-width: 0; }
+@media (max-width: 760px) { .db-modal .form-grid { grid-template-columns: 1fr; gap: 0; } }
+
+/* Chevron on selects (drawn in CSS, no image asset needed) */
+.db-modal select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%238B94A8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+/* ===== Step 2: PHP-prefixed budget input ===== */
+.db-modal .budget-wrap {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 13px; border-radius: 9px;
+  border: 1px solid var(--db-field-border, #d2d5da);
+  background: var(--db-card-alt, #f9fafb);
+}
+.db-modal .budget-wrap:focus-within { border-color: var(--db-accent, #3B82F6); }
+#requestModalOverlay .db-modal .budget-wrap input {
+  border: none !important; background: transparent !important; box-shadow: none !important; padding-left: 0;
+}
+
+/* ===== Step 3: strategies multi-select ===== */
+.db-modal .strategy-wrap { position: relative; }
+.db-modal .select-box {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  min-height: 44px; padding: 8px 40px 8px 13px;
+  border-radius: 9px; font-size: 14px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%238B94A8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
+.db-modal .options-list {
+  position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px;
+  z-index: 30; max-height: 220px; overflow-y: auto; border-radius: 9px;
+}
+.db-modal .option { padding: 10px 13px; font-size: 13.5px; cursor: pointer; }
+.db-modal .tag { padding: 3px 9px; border-radius: 6px; font-size: 12px; }
+
+/* ===== Step 3: upload zone + file list (fallbacks if step3.css doesn't define them) ===== */
+.db-modal .upload-zone {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 28px 16px; text-align: center; cursor: pointer;
+  border: 2px dashed var(--db-accent, #3B82F6); border-radius: 10px;
+}
+.db-modal .upload-zone small { font-size: 11px; opacity: 0.75; }
+.db-modal .upload-link { color: #0088ff; font-weight: 600; }
+.db-modal .uploaded-file-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.db-modal .uploaded-file-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; border-radius: 8px; margin-top: 8px; font-size: 13px;
+}
+.db-modal .uploaded-file-info { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-modal .remove-doc-btn { background: none; border: none; color: #ef4444; font-size: 12px; font-weight: 600; cursor: pointer; }
+
+/* ===== Step 2 fixes: PHP prefix + date icon ===== */
+
+/* Keep the "PHP" label inside the budget box (an older .prefix rule positions it absolutely) */
+.db-modal .budget-wrap { position: relative; }
+.db-modal .budget-wrap .prefix {
+  position: static; inset: auto; transform: none;
+  margin: 0; padding: 0; flex-shrink: 0; font-size: 13px; font-weight: 600;
+}
+.db-modal .budget-wrap input {
+  border: none; background: transparent; box-shadow: none;
+  padding: 12px 0; flex: 1; min-width: 0;
+}
+.db-modal .budget-wrap input:focus { border: none; box-shadow: none; }
+
+/* Calendar icon on the left of date inputs (inline SVG, so no image path can break) */
+.db-modal input[type="date"] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%238B94A8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 14px center;
+  padding-left: 44px;
+}
+
+/* ===== Edit mode: Edit button + Draft badge ===== */
+.db-modal .db-modal-edit-item-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 38px; padding: 0 16px; border-radius: 9px;
+  font-family: 'Inter', 'Roboto', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--db-accent, #3B82F6);
+  background: rgba(59, 130, 246, 0.10);
+  color: var(--db-accent, #3B82F6);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.db-modal .db-modal-edit-item-btn:hover { background: var(--db-accent, #3B82F6); color: #fff; }
+.modal-status-badge.is-draft { background: rgba(148, 163, 184, 0.16); color: var(--db-text-dim, #8B94A8); }
+/* ===== Date inputs: clickable anywhere, readable native icon ===== */
+.db-modal input[type="date"]:not(:disabled) {
+  cursor: pointer;
+}
+
+/* Makes the browser's own calendar icon and popup light on the dark theme */
+[data-theme="dark"] #requestModalOverlay input[type="date"] {
+  color-scheme: dark;
+}
+
+/* ===== Returned banner + review history (layout only; colours come from the existing theme rules) ===== */
+.db-modal .review-returned {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  margin: 0 0 20px;
+  border-radius: 10px;
+}
+.db-modal .review-returned strong { font-size: 14px; line-height: 1.3; }
+.db-modal .review-returned > span { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.db-modal .review-returned small { margin-top: 2px; font-size: 12px; line-height: 1.4; }
+
+.db-modal .review-history-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--db-text-dim, #8B94A8);
+}
+
+.db-modal .review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.db-modal .review-item {
+  padding: 12px 14px;
+  border-radius: 10px;
+}
+
+.db-modal .review-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+.db-modal .review-item-head > span:last-child {
+  font-size: 12.5px;
+  color: var(--db-text-dim, #8B94A8);
+}
+
+.db-modal .review-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.db-modal .review-item-text {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Progress bar: give it room and round the fill */
+.db-modal .track-4 {
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.db-modal .filled-5 {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}

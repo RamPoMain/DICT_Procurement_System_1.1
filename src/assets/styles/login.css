@@ -1,0 +1,221 @@
+/* ============================================================
+   DICT PROCUREMENT — LOGIN PAGE
+   Reuses the --db-* theme variables defined in dashboard.css so
+   the login screen matches the dashboard/profile/entries pages
+   and follows the same dark/light toggle.
+   ============================================================ */
+
+.login-body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--db-bg);
+    color: var(--db-text);
+    font-family: 'Inter', 'Roboto', sans-serif;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.login-body * { box-sizing: border-box; }
+
+/* ---------------- Topbar ---------------- */
+
+.login-topbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 22px 26px;
+}
+
+/* .db-icon-btn is reused as-is from dashboard.css for the theme toggle */
+
+/* ---------------- Layout ---------------- */
+
+.login-center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 20px 60px;
+}
+
+.login-wrap {
+    width: 100%;
+    max-width: 400px;
+}
+
+/* ---------------- Card ---------------- */
+
+.login-card {
+    background: var(--db-card);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius);
+    box-shadow: var(--db-shadow);
+    padding: 40px 34px 34px;
+}
+
+.login-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.login-brand-mark {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.login-brand h1 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--db-text);
+}
+
+.login-brand p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--db-text-dim);
+}
+
+/* ---------------- Error banner ---------------- */
+
+.login-error {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #F87171;
+    font-size: 13px;
+    border-radius: 9px;
+    padding: 11px 14px;
+    margin-bottom: 18px;
+}
+
+.login-error.show { display: flex; }
+
+/* ---------------- Form ---------------- */
+
+.login-form { display: flex; flex-direction: column; gap: 18px; }
+
+.login-field { display: flex; flex-direction: column; gap: 7px; }
+
+.login-field label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--db-text);
+}
+
+.login-field input {
+    width: 100%;
+    padding: 11px 13px;
+    border: 1px solid var(--db-field-border);
+    border-radius: 9px;
+    background: var(--db-card-alt);
+    color: var(--db-text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.login-field input::placeholder { color: var(--db-text-faint); }
+
+.login-field input:focus {
+    border-color: var(--db-accent);
+    box-shadow: 0 0 0 3px var(--db-accent-soft);
+}
+
+.login-field.error-state input {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.06);
+}
+
+.login-submit {
+    margin-top: 4px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--db-accent);
+    color: #fff;
+    border: none;
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+}
+
+.login-submit:hover:not(:disabled) { background: #2563EB; }
+.login-submit:active:not(:disabled) { transform: scale(0.98); }
+.login-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.login-spinner {
+    width: 15px;
+    height: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: login-spin 0.7s linear infinite;
+}
+
+@keyframes login-spin { to { transform: rotate(360deg); } }
+
+.login-forgot { display: flex; justify-content: center; }
+
+.login-forgot a {
+    font-size: 12px;
+    color: var(--db-text-dim);
+    text-decoration: none;
+}
+
+.login-forgot a:hover { color: var(--db-accent); text-decoration: underline; }
+
+.login-footer {
+    text-align: center;
+    font-size: 12px;
+    color: var(--db-text-faint);
+    margin-top: 22px;
+}
+
+/* ---------------- Toast (reuses .db-toast pattern) ---------------- */
+
+.login-toast {
+    position: fixed;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-16px);
+    background: var(--db-card);
+    border: 1px solid var(--db-border);
+    color: var(--db-text);
+    padding: 13px 20px;
+    border-radius: 10px;
+    box-shadow: var(--db-shadow);
+    font-size: 13.5px;
+    font-weight: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 100;
+}
+
+.login-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 480px) {
+    .login-card { padding: 32px 22px 26px; }
+}

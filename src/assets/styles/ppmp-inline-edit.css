@@ -1,0 +1,65 @@
+/* Inline editing in the Entries dropdown.
+   These are the bits the original dashboard-logic.js styled inline.
+   Import once, e.g. in Entries.jsx:  import '../styles/ppmp-inline-edit.css';
+   (Your existing .ep-input / .ep-cell-error / .is-invalid / .ep-doc-* rules
+   from the original stylesheet are reused as-is.) */
+
+.ep-strategies-box {
+  min-width: 210px;
+  width: 100%;
+  max-height: 110px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid #c7c7c7;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.ep-strategies-box.is-invalid { border-color: #ef4444; }
+
+.ep-strategies-box .ep-strategy-opt {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  margin: 4px 0 !important;
+  cursor: pointer !important;
+  width: 100% !important;
+}
+.ep-strategies-box .ep-strategy-opt input[type="checkbox"] {
+  width: 15px !important;
+  height: 15px !important;
+  min-width: 15px !important;
+  max-width: 15px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+  appearance: auto !important;
+}
+.ep-strategies-box .ep-strategy-opt span {
+  flex: 1 1 auto !important;
+  color: #111827 !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+  text-align: left !important;
+  font-weight: normal !important;
+}
+
+.ep-bracket-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: #0284c7;
+}
+
+.ep-doc-cell-body {
+  font-size: 10.5px;
+  line-height: 1.4;
+  word-break: break-word;
+  color: #374151;
+}

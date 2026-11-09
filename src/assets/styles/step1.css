@@ -1,0 +1,54 @@
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+
+.select-wrapper { position: relative; width: 100%; }
+select { appearance: none; padding-right: 40px; }
+.custom-chevron {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  width: 10px; pointer-events: none;
+}
+
+.error-state select {
+  border: 1px solid #dc2626 !important;
+  background-color: #fef2f2 !important;
+}
+
+/* Required-field errors on plain text inputs / textareas, reusing the
+   same red-border-and-tint treatment already used for <select> above. */
+.error-state input,
+.error-state textarea {
+  border: 1px solid #dc2626 !important;
+  background-color: #fef2f2 !important;
+}
+
+.text-45 { color: var(--error-red); font-size: 11px; margin-top: 4px; }
+
+.mode-hint {
+  color: var(--text-gray);
+  font-size: 11px;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+textarea { min-height: 120px; resize: vertical; }
+
+/* Generic "required" message shown under any field-group, same look as .text-45.
+   Hidden by default; shown once its ancestor .field-group carries .error-state. */
+.field-error-msg {
+  display: none;
+  color: var(--error-red);
+  font-size: 11px;
+  margin-top: 4px;
+}
+.error-state .field-error-msg {
+  display: block;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.track-4 { background: rgba(0,0,0,0.1); height: 6px; border-radius: 10px; overflow: hidden; }
+.filled-5 { background: #0088ff; height: 100%; transition: 0.3s; }

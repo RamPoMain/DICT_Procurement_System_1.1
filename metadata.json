@@ -1,0 +1,7 @@
+{
+  "name": "DICT Procurement Management System",
+  "description": "A centralized web application for the Department of Information and Communications Technology (DICT) to prepare, manage, approve, and consolidate Project Procurement Management Plans (PPMP) and compile Annual Procurement Plans (APP) in compliance with Philippine procurement laws (RA 12009).",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

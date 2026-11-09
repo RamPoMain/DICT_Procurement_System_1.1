@@ -1,0 +1,272 @@
+/* ============================================================
+   DICT PROCUREMENT — BULK IMPORT
+   Panel at the top of Step 1 of the request form, plus the
+   "Review import" dialog. Uses the --db-* theme variables from
+   dashboard.css so it follows the dark/light toggle.
+   ============================================================ */
+
+/* ---------------- Top-bar button (beside Close) ---------------- */
+
+.bi-open-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--db-accent, #3B82F6);
+    border-radius: 9px;
+    background: rgba(59, 130, 246, 0.10);
+    color: var(--db-accent, #3B82F6);
+    font-family: 'Inter', 'Roboto', sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.bi-open-btn:hover {
+    background: var(--db-accent, #3B82F6);
+    color: #fff;
+}
+
+@media (max-width: 640px) {
+    .bi-open-btn {
+        height: 34px;
+        padding: 6px 12px;
+        font-size: 11.5px;
+    }
+}
+
+/* ---------------- Buttons ---------------- */
+
+.bi-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 14px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: var(--db-accent, #3B82F6);
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.bi-btn:hover { background: #2563EB; }
+
+.bi-btn.is-secondary {
+    background: transparent;
+    border-color: var(--db-field-border, #C7CCDA);
+    color: var(--db-text, #121826);
+}
+
+.bi-btn.is-secondary:hover {
+    background: var(--db-accent-soft, rgba(59, 130, 246, 0.14));
+    border-color: var(--db-accent, #3B82F6);
+}
+
+/* ---------------- Import dialog steps ---------------- */
+
+.bi-step {
+    display: flex;
+    gap: 14px;
+    padding: 14px 0;
+}
+
+.bi-step + .bi-step { border-top: 1px solid var(--db-border, #D4D9E3); }
+
+.bi-num {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--db-accent-soft, rgba(59, 130, 246, 0.14));
+    color: var(--db-accent, #3B82F6);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.bi-step-main { flex: 1; min-width: 0; }
+.bi-step-main strong { font-size: 13.5px; }
+
+.bi-step-main p {
+    margin: 3px 0 10px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--db-text-dim, #5B6478);
+}
+
+.bi-type-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-width: 260px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--db-text, #121826);
+}
+
+.bi-type-field select {
+    padding: 9px 11px;
+    border: 1px solid var(--db-field-border, #C7CCDA);
+    border-radius: 8px;
+    background: var(--db-card-alt, #F8FAFC);
+    color: var(--db-text, #121826);
+    font-family: inherit;
+    font-size: 13px;
+}
+
+/* ---------------- Drop zone ---------------- */
+
+.bi-drop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 22px 12px;
+    border: 2px dashed var(--db-field-border, #C7CCDA);
+    border-radius: 9px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.bi-drop:hover,
+.bi-drop:focus-visible,
+.bi-drop.is-over {
+    outline: none;
+    border-color: var(--db-accent, #3B82F6);
+    background: var(--db-accent-soft, rgba(59, 130, 246, 0.14));
+}
+
+.bi-drop-text { font-size: 13px; }
+.bi-link { color: var(--db-accent, #3B82F6); font-weight: 600; }
+.bi-drop-sub { font-size: 11px; color: var(--db-text-faint, #9AA3B5); }
+
+/* ---------------- Review dialog ---------------- */
+
+.bi-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(2, 6, 18, 0.6);
+}
+
+.bi-dialog {
+    width: 100%;
+    max-width: 640px;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 24px 18px;
+    border: 1px solid var(--db-border, #D4D9E3);
+    border-radius: var(--db-radius, 14px);
+    background: var(--db-card, #FFFFFF);
+    color: var(--db-text, #121826);
+    box-shadow: var(--db-shadow, 0 8px 24px rgba(0, 0, 0, 0.35));
+}
+
+.bi-dialog h3 { margin: 0 0 2px; font-size: 17px; }
+
+.bi-file {
+    margin: 0 0 14px;
+    font-size: 12px;
+    color: var(--db-text-dim, #5B6478);
+    overflow-wrap: anywhere;
+}
+
+.bi-dialog-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.bi-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+
+.bi-chip {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--db-accent-soft, rgba(59, 130, 246, 0.14));
+    color: var(--db-text-dim, #5B6478);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.bi-chip.is-ok { background: var(--db-green-soft, rgba(34, 197, 94, 0.14)); color: #16A34A; }
+.bi-chip.is-bad { background: rgba(239, 68, 68, 0.12); color: #DC2626; }
+
+.bi-fatal {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 9px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #DC2626;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.bi-sub { margin: 14px 0 8px; font-size: 12.5px; font-weight: 700; }
+
+.bi-problems { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+
+.bi-problems > li {
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.07);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    font-size: 12.5px;
+}
+
+.bi-problems ul { margin: 4px 0 0 18px; padding: 0; }
+.bi-problems ul li { margin: 2px 0; color: var(--db-text-dim, #5B6478); }
+
+.bi-table-wrap { overflow-x: auto; }
+
+.bi-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+
+.bi-table th,
+.bi-table td {
+    padding: 7px 9px;
+    border-bottom: 1px solid var(--db-border, #D4D9E3);
+    text-align: left;
+    vertical-align: top;
+}
+
+.bi-table th { color: var(--db-text-dim, #5B6478); font-weight: 600; }
+
+.bi-more,
+.bi-note {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--db-text-dim, #5B6478);
+}
+
+.bi-spacer { flex: 1; }
+
+.bi-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--db-border, #D4D9E3);
+}
+
+@media (max-width: 600px) {
+    .bi-dialog { padding: 18px 16px 14px; }
+}
