@@ -24,7 +24,6 @@ import {
   getItemsBudgetModeMismatch,
   buildMissingDocsMessage,
   buildBudgetMismatchMessage,
-  submitPpmpForApproval,
   performPpmpReviewAction,
   isAppFinal,
   getNewRequestTarget,
@@ -34,7 +33,7 @@ import {
   normalizeDescription
 } from '../../utils/procurementRules.js';
 import { generatePPMP_PDF } from '../../utils/pdfGenerator.js';
-import { submitPpmpToDtms, testSendToDtms } from '../../utils/dtmsClient.js';
+import { submitPpmpViaDtms, testSendToDtms } from '../../utils/dtmsClient.js';
 import { exportPPMP_Excel } from '../../utils/entriesExport.js';
 import FileStore from '../../utils/fileStore.js';
 import { getNextPpmpNumber } from '../../utils/ppmpNumber.js';
@@ -682,19 +681,12 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
     if (!currentRecord) return;
     setSubmitDialogOpen(false);
     try {
-      // 1) send to DTMS first; if it fails nothing changes locally
-      const dtms = await submitPpmpToDtms(currentRecord, user);
-      // 2) normal local submit (validations, status = For Approval)
-      const res = submitPpmpForApproval(currentRecord.id, user);
+      // Validate, send to DTMS and mark For Approval in one step (see submitPpmpViaDtms).
+      const res = await submitPpmpViaDtms(currentRecord.id, user);
       if (!res.success) { setNotice(res.error); return; }
-      // 3) remember the DTMS tracking number
-      const all = JSON.parse(localStorage.getItem('procurement_records')) || [];
-      const rec = all.find(r => r.id === currentRecord.id);
-      rec.dtms_track = dtms.tracknumber;
-      localStorage.setItem('procurement_records', JSON.stringify(all));
-      setNotice(`${res.message} DTMS tracking no. ${dtms.tracknumber}`);
-      setCurrentRecord({ ...rec });
-      setRecordStatus(rec.status);
+      setNotice(res.message);
+      setCurrentRecord({ ...res.record });
+      setRecordStatus(res.record.status);
       if (onSaved) onSaved();
     } catch (e) {
       setNotice(e.message);

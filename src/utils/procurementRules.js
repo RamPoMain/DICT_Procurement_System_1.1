@@ -9,6 +9,19 @@ export const APPROVAL_CHAIN = [
   { role: 'RD',   label: 'Regional Director' }
 ];
 
+// A Unit Head who submits for their own unit auto-endorses, so HEAD never reviews that round
+// (see submitPpmpForApproval). Detected from the 'submitted' remark logged for the current round.
+export function isHeadStepSkipped(record) {
+  if (!record || !Array.isArray(record.remarksHistory)) return false;
+  const round = Number(record.submission_round) || 1;
+  return record.remarksHistory.some(h => h && h.action === 'submitted' && h.stage === 'HEAD' && Number(h.round) === round);
+}
+
+// The approval steps that actually apply to this record (HEAD removed when the Unit Head submitted).
+export function getEffectiveApprovalChain(record) {
+  return isHeadStepSkipped(record) ? APPROVAL_CHAIN.filter(step => step.role !== 'HEAD') : APPROVAL_CHAIN;
+}
+
 export function getApprovalStep(stage) {
   return APPROVAL_CHAIN.find(step => step.role === stage) || null;
 }
@@ -64,7 +77,7 @@ export const PROCUREMENT_MODE_RULES = {
     maxBudget: 200000,
     allowedTypes: ['Goods', 'Infrastructure', 'Consulting Services'],
     legalBasis: 'RA 12009 Sec. 32',
-    bracketLabel: '₱0 – ₱200,000'
+    bracketLabel: '₱0 – ₱199,999'
   },
   'Small Value Procurement (SVP)': {
     mode: 'Small Value Procurement (SVP)',
@@ -72,7 +85,7 @@ export const PROCUREMENT_MODE_RULES = {
     maxBudget: 2000000,
     allowedTypes: ['Goods', 'Infrastructure', 'Consulting Services'],
     legalBasis: 'RA 12009 Sec. 31',
-    bracketLabel: '₱200,001 – ₱2,000,000'
+    bracketLabel: '₱200,000 – ₱1,999,999'
   },
   'Shopping': {
     mode: 'Shopping',
@@ -183,7 +196,7 @@ export function budgetBracketMessage(modeValue, budgetNumber) {
 
 export function parseBudgetNumber(val) {
   if (!val) return 0;
-  const p = parseFloat(String(val).replace(/,/g, ''));
+  const p = parseFloat(String(val).replace(/^\s*(?:PHP|P|₱)\s*/i, '').replace(/,/g, ''));
   return isNaN(p) ? 0 : p;
 }
 
@@ -436,15 +449,9 @@ export function getLatestApprovedPpmpForOffice(office, fiscalYear) {
   return approved[0];
 }
 
+// Kept for existing callers; same behavior as carryOverItems (ids start at newBaseTimestamp + 1).
 export function clonePpmpItemsForCarryOver(sourceRecord, newBaseTimestamp = Date.now()) {
-  if (!sourceRecord) return [];
-  const items = getRecordItems(sourceRecord);
-  return items.map((item, idx) => {
-    const cloned = JSON.parse(JSON.stringify(item));
-    cloned.origin_id = item.origin_id || item.id;
-    cloned.id = newBaseTimestamp + idx + 1;
-    return cloned;
-  });
+  return carryOverItems(sourceRecord, newBaseTimestamp + 1);
 }
 
 
@@ -619,12 +626,17 @@ export function carryOverItems(previous, idStart = Date.now() + 1) {
   }));
 }
 
+const sameOffice = (a, b) => {
+  const norm = (v) => String(v || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return norm(a) !== '' && norm(a) === norm(b);
+};
+
 export function canSessionActOnRecord(record, session) {
   if (!session || !session.canApprove || !record) return false;
   if (getPpmpStatus(record) !== 'For Approval') return false;
   if (record.dtms_track) return false; // approval happens in DTMS
   if (record.currentApproverRole !== session.stage) return false;
-  if (session.stage === 'HEAD') return record.end_user === session.headOf;
+  if (session.stage === 'HEAD') return sameOffice(record.end_user, session.headOf);
   return true;
 }
 
@@ -679,26 +691,27 @@ export function recordApprovedPpmpNumber(record) {
   }
 }
 
-export function submitPpmpForApproval(recordId, session) {
+// Why this PPMP cannot be submitted yet, or null when it can. Used before anything is sent to DTMS.
+export function getPpmpSubmitError(record) {
+  if (!record) return 'Record not found.';
+  if (!isPpmpDraft(record)) return 'This PPMP was already submitted for approval.';
+  const missingDocs = getItemsMissingDocuments(record);
+  if (missingDocs.length > 0) return buildMissingDocsMessage(missingDocs);
+  const modeMismatch = getItemsBudgetModeMismatch(record);
+  if (modeMismatch.length > 0) return buildBudgetMismatchMessage(modeMismatch);
+  return null;
+}
+
+// extra: optional fields saved in the same write as the status change (e.g. { dtms_track }).
+export function submitPpmpForApproval(recordId, session, extra = null) {
   if (!session) return { success: false, error: 'Not authenticated.' };
   const all = JSON.parse(localStorage.getItem('procurement_records')) || [];
   const idx = all.findIndex(r => r.id === recordId);
   if (idx === -1) return { success: false, error: 'Record not found.' };
 
   const record = all[idx];
-  if (!isPpmpDraft(record)) {
-    return { success: false, error: 'This PPMP was already submitted for approval.' };
-  }
-
-  const missingDocs = getItemsMissingDocuments(record);
-  if (missingDocs.length > 0) {
-    return { success: false, error: buildMissingDocsMessage(missingDocs) };
-  }
-
-  const modeMismatch = getItemsBudgetModeMismatch(record);
-  if (modeMismatch.length > 0) {
-    return { success: false, error: buildBudgetMismatchMessage(modeMismatch) };
-  }
+  const problem = getPpmpSubmitError(record);
+  if (problem) return { success: false, error: problem };
 
   record.status = 'For Approval';
   record.submitted_at = Date.now();
@@ -728,6 +741,7 @@ export function submitPpmpForApproval(recordId, session) {
     role: session.role,
     email: session.email
   };
+  if (extra) Object.assign(record, extra);
 
   try {
     localStorage.setItem('procurement_records', JSON.stringify(all));
@@ -756,6 +770,10 @@ export function performPpmpReviewAction(recordId, action, remarksText, session) 
   }
   if (!canSessionActOnRecord(record, session)) {
     return { success: false, error: 'This PPMP is not waiting for your approval.' };
+  }
+
+  if (!['approve', 'reject', 'comment'].includes(action)) {
+    return { success: false, error: 'Unknown review action.' };
   }
 
   const remarks = (remarksText || '').trim();

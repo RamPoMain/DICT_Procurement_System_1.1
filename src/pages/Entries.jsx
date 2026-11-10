@@ -16,7 +16,6 @@ import {
   getItemsBudgetModeMismatch,
   buildMissingDocsMessage,
   buildBudgetMismatchMessage,
-  submitPpmpForApproval,
   isLatestApprovedCarryoverSource
 } from '../utils/procurementRules.js';
 import {
@@ -41,7 +40,7 @@ import {
 import { exportPPMP_Excel } from '../utils/entriesExport';
 import ExportMenu from '../components/entries/ExportMenu.jsx';
 import { generatePPMP_PDF } from '../utils/pdfGenerator.js';
-import { syncAllWithDtms } from '../utils/dtmsClient.js';
+import { syncAllWithDtms, submitPpmpViaDtms } from '../utils/dtmsClient.js';
 import "../assets/styles/ppmp-inline-edit.css";
 
 const STAGE_LABELS = { HEAD: 'Unit Head', TOD: 'TOD', BO: 'Budget Officer', RD: 'Regional Director' };
@@ -258,8 +257,13 @@ export default function Entries() {
       }
       setExpandedId(null);
     } else {
-      const res = submitPpmpForApproval(record.id, user);
-      setToast(res.success ? res.message : res.error);
+      // Same path as the Request modal: validate, send to DTMS, then mark For Approval.
+      setToast('Submitting to DTMS…');
+      submitPpmpViaDtms(record.id, user)
+        .then((res) => setToast(res.success ? res.message : res.error))
+        .catch((err) => setToast(err.message))
+        .finally(loadData);
+      return;
     }
     loadData();
   };
