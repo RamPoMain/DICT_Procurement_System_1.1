@@ -25,8 +25,10 @@ import {
   formatRelativeTime,
   activityNote,
   getAppBadge,
-  isAppPendingForUser
+  isAppPendingForUser,
+  canActOnApp
 } from '../utils/dashboardHelpers';
+import { syncAllWithDtms } from '../utils/dtmsClient.js';
 import { deleteRecordById } from '../utils/entriesHelpers.js';
 import { generateAPP_PDF } from '../utils/pdfGenerator';
 import { exportStandardAppExcel, exportPhilGepsAppExcel, exportAppTemplateExcel, EXPORT_ROLES } from '../utils/appTemplateExport';
@@ -96,6 +98,32 @@ export default function Dashboard() {
   }, [user]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Pull DTMS results (returned signatures / rejections) in so the notification dot and the APP
+  // Review buttons update without the user having to open Entries first.
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      try {
+        if (await syncAllWithDtms() && alive) loadData();
+      } catch (e) {
+        console.warn('DTMS sync failed:', e.message);
+      }
+    };
+    const syncWhenVisible = () => {
+      if (document.visibilityState === 'visible') run();
+    };
+    run();
+    const t = setInterval(run, 45000);
+    document.addEventListener('visibilitychange', syncWhenVisible);
+    window.addEventListener('focus', syncWhenVisible);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
+      window.removeEventListener('focus', syncWhenVisible);
+    };
+  }, [loadData]);
 
   // Pages used to hand off to the dashboard through sessionStorage
   // (e.g. "open this record", "open a new request"). Same behavior here.
@@ -186,10 +214,8 @@ export default function Dashboard() {
   const recent = [...records].sort((a, b) => b.id - a.id).slice(0, 6);
 
   const reviewButton = (app) => {
-    const myTurn =
-      app.status === 'For Approval' &&
-      ((user?.role === 'ARD' && app.currentApproverRole === 'ARD') ||
-        (user?.role === 'RD' && app.currentApproverRole === 'RD'));
+    // Only once the previous DTMS signature has come back (same rule as the APP modal).
+    const myTurn = canActOnApp(app, user);
     return myTurn ? (
       <button
         type="button"

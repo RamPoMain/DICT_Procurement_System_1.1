@@ -99,19 +99,32 @@ export function activityNote(record) {
   return '';
 }
 
+// True when this account is the APP's current approver AND the previous DTMS signature has come
+// back (same rule as canActOnRecord for PPMPs). Supply never acts locally: it signs in DTMS.
+export function canActOnApp(app, user) {
+  if (!user || !user.canApprove || !app) return false;
+  if (app.status !== 'For Approval') return false;
+  if (app.dtms_track && (
+    !app.dtms_signing_complete ||
+    app.dtms_signed_file_track !== app.dtms_track
+  )) return false;
+  return app.currentApproverRole === user.role;
+}
+
 // Badge shown for an APP in the dashboard's APP section.
 export function getAppBadge(app) {
   if (app.status === 'Completed') return { className: 'is-completed', label: 'Final (Approved)' };
   if (app.status === 'For Approval') {
-    const who = app.currentApproverRole === 'ARD' ? 'ARD' : 'RD';
+    const who = { SUP: 'Supply', ARD: 'ARD', RD: 'RD' }[app.currentApproverRole] || 'RD';
     return { className: 'is-pending', label: `Under Review (${who})` };
   }
   if (app.returned_for_revision) return { className: 'is-returned', label: 'Returned' };
   return { className: 'is-draft', label: 'Draft' };
 }
 
-// True when an APP is waiting on this account's role (drives the notification dot).
+// True when an APP is ready for this account to act on (drives the notification dot).
+// It only lights up once the signed copy is back from DTMS, not while a signature is pending.
 export function isAppPendingForUser(apps, user) {
   if (!user) return false;
-  return apps.some((a) => a.status === 'For Approval' && a.currentApproverRole === user.role);
+  return apps.some((a) => canActOnApp(a, user));
 }
