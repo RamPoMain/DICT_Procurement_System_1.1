@@ -33,7 +33,7 @@ import {
   normalizeDescription
 } from '../../utils/procurementRules.js';
 import { generatePPMP_PDF } from '../../utils/pdfGenerator.js';
-import { submitPpmpViaDtms, testSendToDtms } from '../../utils/dtmsClient.js';
+import { downloadSignedDtmsFile, submitPpmpStageToDtms, submitPpmpViaDtms, syncAllWithDtms, testSendToDtms } from '../../utils/dtmsClient.js';
 import { exportPPMP_Excel } from '../../utils/entriesExport.js';
 import FileStore from '../../utils/fileStore.js';
 import { getNextPpmpNumber } from '../../utils/ppmpNumber.js';
@@ -94,6 +94,7 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewRemarks, setReviewRemarks] = useState('');
   const [reviewRemarksError, setReviewRemarksError] = useState(false);
+  const [stageSubmitting, setStageSubmitting] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [dtmsTestDialogOpen, setDtmsTestDialogOpen] = useState(false);
   const [dtmsTesting, setDtmsTesting] = useState(false);
@@ -189,6 +190,40 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
       });
       setRecordStatus('Draft');
     }
+  }, [isOpen, recordId]);
+
+  useEffect(() => {
+    if (!isOpen || !recordId) return undefined;
+    let active = true;
+    const sync = async () => {
+      try {
+        await syncAllWithDtms();
+      } catch (error) {
+        if (active) setNotice(`DTMS sync issue: ${error.message}`);
+      }
+    };
+    const syncWhenVisible = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    sync();
+    const syncTimer = setInterval(sync, 45000);
+    document.addEventListener('visibilitychange', syncWhenVisible);
+    window.addEventListener('focus', syncWhenVisible);
+    const timer = setInterval(() => {
+      const records = JSON.parse(localStorage.getItem('procurement_records')) || [];
+      const record = records.find((item) => item.id === recordId);
+      if (record) {
+        setCurrentRecord(record);
+        setRecordStatus(record.status || 'Draft');
+      }
+    }, 5000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      clearInterval(syncTimer);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
+      window.removeEventListener('focus', syncWhenVisible);
+    };
   }, [isOpen, recordId]);
 
   // Live detection of Two Failed Biddings under RA 12009 Sec. 33 and linking of re-bids
@@ -707,11 +742,32 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
     }
   };
 
-  const handleReviewAction = (action) => {
-    if (!currentRecord) return;
+  const handleReviewAction = async (action) => {
+    if (!currentRecord || stageSubmitting) return;
     const remarks = reviewRemarks.trim();
     if ((action === 'reject' || action === 'comment') && !remarks) {
       setReviewRemarksError(true);
+      return;
+    }
+    if (action === 'approve' && ['TOD', 'BO'].includes(user?.stage) && currentRecord.dtms_track) {
+      setStageSubmitting(true);
+      try {
+        const result = await submitPpmpStageToDtms(currentRecord.id, user, remarks);
+        if (!result.success) {
+          setNotice(result.error);
+          return;
+        }
+        setReviewDialogOpen(false);
+        setReviewRemarks('');
+        setReviewRemarksError(false);
+        setCurrentRecord({ ...result.record });
+        setNotice(result.message);
+        if (onSaved) onSaved();
+      } catch (error) {
+        setNotice(`Could not send this PPMP to DTMS: ${error.message}`);
+      } finally {
+        setStageSubmitting(false);
+      }
       return;
     }
     const res = performPpmpReviewAction(currentRecord.id, action, remarks, user);
@@ -986,6 +1042,29 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
             }} />
             <strong>Currently with:</strong>
             <span>{getApprovalStep(currentRecord.currentApproverRole)?.label || currentRecord.currentApproverRole}</span>
+          </div>
+        )}
+
+        {currentRecord?.dtms_signed_file_id && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            <button
+              type="button"
+              className="app-preview-btn"
+              onClick={() => setPreviewDoc({
+                fileId: currentRecord.dtms_signed_file_id,
+                name: currentRecord.dtms_signed_file_name || `PPMP_${currentRecord.ppmp_no}_signed.pdf`,
+                type: 'application/pdf'
+              })}
+            >
+              View signed DTMS PDF
+            </button>
+            <button
+              type="button"
+              className="app-preview-btn is-secondary"
+              onClick={() => downloadSignedDtmsFile(currentRecord).catch((e) => setNotice(e.message))}
+            >
+              Download signed PDF
+            </button>
           </div>
         )}
 
@@ -1415,7 +1494,7 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
                   className="export-app-btn"
                   onClick={() => setDtmsTestDialogOpen(true)}
                   disabled={dtmsTesting}
-                  title="Send a test copy to DTMS using the configured reviewer addresses"
+                  title="Send a test copy to DTMS using the configured signer addresses"
                 >
                   {dtmsTesting ? 'Sending test…' : 'Test DTMS Send'}
                 </button>
@@ -1458,7 +1537,7 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
           <div className="logout-overlay show" style={{ zIndex: 3000 }}>
             <div className="logout-modal" role="alertdialog" aria-modal="true">
               <h3>Send a PPMP test copy to DTMS?</h3>
-              <p>This creates a real document in the configured DTMS environment and may notify the reviewer accounts. The title will be marked [TEST]. It will not change this PPMP's local status or tracking information.</p>
+              <p>This creates a real test document in DTMS and may notify the configured signer accounts. It routes to the Department Head, TOD, and Budget Officer only. The title will be marked [TEST] and it will not change this PPMP's local status or tracking information.</p>
               <div className="logout-actions">
                 <button type="button" className="logout-cancel-btn" onClick={() => setDtmsTestDialogOpen(false)}>Cancel</button>
                 <button type="button" className="logout-confirm-btn is-approve" onClick={handleConfirmDtmsTest}>Send test copy</button>
@@ -1479,8 +1558,8 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
               <h3>Submit PPMP No. {currentRecord?.ppmp_no || headerData.ppmp_no} for approval?</h3>
               <p>
                 {user?.stage === 'HEAD'
-                  ? 'Its status will change from Draft to For Approval and it goes straight to the TOD. '
-                  : 'Its status will change from Draft to For Approval and it goes to your Unit Head. '}
+                  ? 'It will be sent to DTMS for your Department Head’s digital signature. After signing, it returns to the Procurement System for TOD review. '
+                  : 'It will be sent to DTMS for your Department Head’s digital signature. After signing, it returns to the Procurement System for TOD review. '}
                 While it is under review it can no longer be edited or get new items.
               </p>
               <div className="logout-actions">
@@ -1511,9 +1590,12 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
                   const stepIdx = APPROVAL_CHAIN.findIndex(s => s.role === currentRecord.currentApproverRole);
                   const isLastStep = stepIdx === APPROVAL_CHAIN.length - 1;
                   const nextStep = !isLastStep && stepIdx > -1 ? APPROVAL_CHAIN[stepIdx + 1] : null;
-                  return (nextStep
-                    ? `Approve to forward it to the ${nextStep.label}. `
-                    : 'Approve is the final step: it marks the PPMP Final and closes it. ') +
+                  const sendsForSignature = ['TOD', 'BO'].includes(currentRecord.currentApproverRole) && !!currentRecord.dtms_track;
+                  return (sendsForSignature
+                    ? `Approve to send it to DTMS for your digital signature. After signing, it returns to the Procurement System for ${nextStep?.label || 'the next stage'}. `
+                    : nextStep
+                      ? `Approve to forward it to the ${nextStep.label}. `
+                      : 'Approve is the final step: it marks the PPMP Final and closes it. ') +
                     `Reject returns it to the requesting office for revision (remarks required). Your decision is recorded under ${user?.roleName || 'Approver'}.`;
                 })()}
               </p>
@@ -1559,6 +1641,7 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
                 <button
                   type="button"
                   className="logout-cancel-btn"
+                  disabled={stageSubmitting}
                   onClick={() => {
                     setReviewDialogOpen(false);
                     setReviewRemarks('');
@@ -1570,6 +1653,7 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
                 <button
                   type="button"
                   className="db-action-btn"
+                  disabled={stageSubmitting}
                   style={{ width: '100%', height: 'auto', padding: '10px 14px', borderRadius: 9, fontWeight: 600, fontSize: 13 }}
                   onClick={() => handleReviewAction('comment')}
                 >
@@ -1578,6 +1662,7 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
                 <button
                   type="button"
                   className="logout-confirm-btn is-reject"
+                  disabled={stageSubmitting}
                   onClick={() => handleReviewAction('reject')}
                 >
                   Reject
@@ -1585,9 +1670,14 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
                 <button
                   type="button"
                   className="logout-confirm-btn is-approve"
+                  disabled={stageSubmitting}
                   onClick={() => handleReviewAction('approve')}
                 >
-                  Approve
+                  {stageSubmitting
+                    ? 'Sending to DTMS…'
+                    : ['TOD', 'BO'].includes(currentRecord.currentApproverRole) && currentRecord.dtms_track
+                      ? 'Approve & Send for Signature'
+                      : 'Approve'}
                 </button>
               </div>
             </div>

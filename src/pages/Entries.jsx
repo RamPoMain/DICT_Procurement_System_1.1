@@ -142,6 +142,7 @@ export default function Entries() {
   const [previewRecord, setPreviewRecord] = useState(null);
   // True while the open PPMP has unsaved inline edits (reported by PpmpExpanded).
   const dirtyRef = useRef(false);
+  const dtmsSyncInFlightRef = useRef(false);
   const handleDirtyChange = useCallback((isDirty) => { dirtyRef.current = isDirty; }, []);
 
   const loadData = useCallback(() => {
@@ -155,12 +156,32 @@ export default function Entries() {
   useEffect(() => {
     let alive = true;
     const run = async () => {
-      if (dirtyRef.current) return; // don't reload while a row is being edited
-      try { if (await syncAllWithDtms() && alive) loadData(); } catch (e) { /* retry next tick */ }
+      if (dirtyRef.current || dtmsSyncInFlightRef.current) return; // don't reload while editing or already syncing
+      dtmsSyncInFlightRef.current = true;
+      try {
+        if (await syncAllWithDtms() && alive) loadData();
+      } catch (e) {
+        if (alive) {
+          loadData();
+          setToast(`DTMS sync issue: ${e.message}`);
+        }
+      } finally {
+        dtmsSyncInFlightRef.current = false;
+      }
+    };
+    const syncWhenVisible = () => {
+      if (document.visibilityState === 'visible') run();
     };
     run();
     const t = setInterval(run, 45000);
-    return () => { alive = false; clearInterval(t); };
+    document.addEventListener('visibilitychange', syncWhenVisible);
+    window.addEventListener('focus', syncWhenVisible);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
+      window.removeEventListener('focus', syncWhenVisible);
+    };
   }, [loadData]);
 
   useEffect(() => {

@@ -146,6 +146,10 @@ export function AuthProvider({ children }) {
   const canActOnRecord = (record) => {
     if (!user || !user.canApprove || !record) return false;
     if (record.status !== 'For Approval') return false;
+    if (record.dtms_track && (
+      !record.dtms_signing_complete ||
+      record.dtms_signed_file_track !== record.dtms_track
+    )) return false;
     if (record.currentApproverRole !== user.stage) return false;
     if (user.stage === 'HEAD') return record.end_user === user.headOf;
     return true;

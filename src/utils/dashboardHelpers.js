@@ -61,6 +61,10 @@ export function getVisibleRecords(all, user) {
 export function canActOnRecord(record, user) {
   if (!user || !user.canApprove || !record) return false;
   if (getPpmpStatus(record) !== 'For Approval') return false;
+  if (record.dtms_track && (
+    !record.dtms_signing_complete ||
+    record.dtms_signed_file_track !== record.dtms_track
+  )) return false;
   if (record.currentApproverRole !== user.stage) return false;
   if (user.stage === 'HEAD') return record.end_user === user.headOf;
   return true;

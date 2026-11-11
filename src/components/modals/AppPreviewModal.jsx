@@ -10,12 +10,14 @@ import {
 } from '../../utils/procurementRules.js';
 import { previewAPP_PDF, generateAPP_PDF, formatMonthYear } from '../../utils/pdfGenerator.js';
 import { exportStandardAppExcel, exportPhilGepsAppExcel } from '../../utils/appTemplateExport.js';
-import { testSendToDtms } from '../../utils/dtmsClient.js';
+import { downloadSignedDtmsFile, submitAppViaDtms, testSendToDtms } from '../../utils/dtmsClient.js';
+import FileStore from '../../utils/fileStore.js';
 
 export default function AppPreviewModal({ isOpen, onClose, fiscalYear, onUpdated }) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('sheet'); // 'sheet' | 'pdf'
   const [blobUrl, setBlobUrl] = useState(null);
+  const [signedPdfUrl, setSignedPdfUrl] = useState(null);
   const [appRecord, setAppRecord] = useState(null);
   const [allItems, setAllItems] = useState([]);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
@@ -24,6 +26,8 @@ export default function AppPreviewModal({ isOpen, onClose, fiscalYear, onUpdated
   const [exportNotice, setExportNotice] = useState('');
   const [showDtmsTestConfirm, setShowDtmsTestConfirm] = useState(false);
   const [dtmsTesting, setDtmsTesting] = useState(false);
+  const [showDtmsSubmitConfirm, setShowDtmsSubmitConfirm] = useState(false);
+  const [dtmsSubmitting, setDtmsSubmitting] = useState(false);
 
   const showToast = (msg) => {
     setExportNotice(msg);
@@ -57,6 +61,38 @@ export default function AppPreviewModal({ isOpen, onClose, fiscalYear, onUpdated
     };
   }, [isOpen, fiscalYear]);
 
+  useEffect(() => {
+    if (!isOpen || !fiscalYear) return undefined;
+    const timer = setInterval(() => setAppRecord(getAppRecord(fiscalYear)), 5000);
+    return () => clearInterval(timer);
+  }, [isOpen, fiscalYear]);
+
+  useEffect(() => {
+    if (!isOpen || !appRecord?.dtms_signed_file_id) {
+      setSignedPdfUrl(null);
+      return undefined;
+    }
+
+    let active = true;
+    let url;
+    FileStore.get(appRecord.dtms_signed_file_id).then((blob) => {
+      if (!active) return;
+      if (!blob) {
+        showToast('Signed APP PDF is missing from this browser’s file storage.');
+        return;
+      }
+      url = URL.createObjectURL(blob);
+      setSignedPdfUrl(url);
+    }).catch((error) => {
+      if (active) showToast(`Could not load signed APP PDF: ${error.message}`);
+    });
+
+    return () => {
+      active = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [isOpen, appRecord?.dtms_signed_file_id]);
+
   if (!isOpen || !appRecord) return null;
 
   // Split items into standard DBM categories
@@ -80,6 +116,11 @@ export default function AppPreviewModal({ isOpen, onClose, fiscalYear, onUpdated
   const isFinal = appRecord.status === 'Completed';
 
   const handleAction = (action) => {
+    if (appRecord.dtms_track) {
+      showToast('This APP is being approved in DTMS. Use DTMS to sign or reject it.');
+      setShowReviewDialog(false);
+      return;
+    }
     if (action !== 'approve' && !remarks.trim()) {
       setReviewError('Remarks are required to reject or add remarks.');
       return;
@@ -123,18 +164,21 @@ export default function AppPreviewModal({ isOpen, onClose, fiscalYear, onUpdated
     if (onUpdated) onUpdated();
   };
 
-  const submitApp = () => {
-    const updated = {
-      ...appRecord,
-      status: 'For Approval',
-      currentApproverRole: 'ARD',
-      returned_for_revision: false,
-      submitted_by: { name: user.roleName, role: user.role },
-      submitted_at: Date.now()
-    };
-    saveAppRecord(updated);
-    setAppRecord(updated);
-    if (onUpdated) onUpdated();
+  const submitApp = async () => {
+    if (dtmsSubmitting) return;
+    setShowDtmsSubmitConfirm(false);
+    setDtmsSubmitting(true);
+    try {
+      const result = await submitAppViaDtms(fiscalYear, user);
+      if (!result.success) throw new Error(result.error);
+      setAppRecord(result.record);
+      showToast(`APP sent to DTMS for signing. Tracking no. ${result.tracknumber}`);
+      if (onUpdated) onUpdated();
+    } catch (e) {
+      showToast(`APP DTMS submission failed: ${e.message}`);
+    } finally {
+      setDtmsSubmitting(false);
+    }
   };
 
   const handleDtmsTest = async () => {
@@ -214,7 +258,7 @@ export default function AppPreviewModal({ isOpen, onClose, fiscalYear, onUpdated
                 className={`app-view-tab ${activeTab === 'pdf' ? 'active' : ''}`}
                 onClick={() => setActiveTab('pdf')}
               >
-                📄 PDF Preview
+                {signedPdfUrl ? '📄 Signed PDF' : '📄 PDF Preview'}
               </button>
             </div>
             <button type="button" className="app-preview-x" onClick={onClose} aria-label="Close modal">&times;</button>
@@ -350,8 +394,19 @@ export default function AppPreviewModal({ isOpen, onClose, fiscalYear, onUpdated
               </div>
             </div>
           ) : (
-            blobUrl ? (
-              <iframe src={`${blobUrl}#view=FitH`} className="app-preview-frame" title="APP PDF Preview" />
+            (signedPdfUrl || blobUrl) ? (
+              <>
+                {signedPdfUrl && (
+                  <div style={{ padding: '7px 12px', color: '#166534', background: '#dcfce7', fontSize: 12, fontWeight: 600 }}>
+                    DTMS-signed APP · Tracking no. {appRecord.dtms_track}
+                  </div>
+                )}
+                <iframe
+                  src={`${signedPdfUrl || blobUrl}#view=FitH`}
+                  className="app-preview-frame"
+                  title={signedPdfUrl ? 'DTMS-signed APP PDF' : 'APP PDF Preview'}
+                />
+              </>
             ) : (
               <p>Loading APP preview...</p>
             )
@@ -399,19 +454,29 @@ export default function AppPreviewModal({ isOpen, onClose, fiscalYear, onUpdated
               className="app-preview-btn"
               onClick={() => setShowDtmsTestConfirm(true)}
               disabled={dtmsTesting}
-              title="Send a test copy to DTMS using the configured reviewer addresses"
+              title="Send a test copy to DTMS using the configured signer addresses"
             >
               {dtmsTesting ? 'Sending test…' : 'Test DTMS Send'}
             </button>
           )}
 
-          {user?.role === 'SUP' && appRecord.status === 'Draft' && (
-            <button type="button" className="app-preview-btn" onClick={submitApp}>
-              Submit APP for Review &rarr;
+          {appRecord.dtms_signed_file_id && (
+            <button
+              type="button"
+              className="app-preview-btn"
+              onClick={() => downloadSignedDtmsFile(appRecord).catch((e) => showToast(e.message))}
+            >
+              Download signed DTMS PDF
             </button>
           )}
 
-          {((user?.role === 'ARD' && appRecord.currentApproverRole === 'ARD') || (user?.role === 'RD' && appRecord.currentApproverRole === 'RD')) && (
+          {user?.role === 'SUP' && appRecord.status === 'Draft' && (
+            <button type="button" className="app-preview-btn" onClick={() => setShowDtmsSubmitConfirm(true)} disabled={dtmsSubmitting}>
+              {dtmsSubmitting ? 'Sending to DTMS…' : 'Submit APP for signing →'}
+            </button>
+          )}
+
+          {!appRecord.dtms_track && ((user?.role === 'ARD' && appRecord.currentApproverRole === 'ARD') || (user?.role === 'RD' && appRecord.currentApproverRole === 'RD')) && (
             <button type="button" className="app-preview-btn" onClick={() => setShowReviewDialog(true)}>
               Review & Decide &rarr;
             </button>
@@ -423,10 +488,25 @@ export default function AppPreviewModal({ isOpen, onClose, fiscalYear, onUpdated
         <div className="logout-overlay show">
           <div className="logout-modal" role="alertdialog" aria-modal="true">
             <h3>Send an APP test copy to DTMS?</h3>
-            <p>This creates a real document in the configured DTMS environment and may notify the configured ARD and RD reviewer accounts. The title will be marked [TEST]. It will not change this APP's local status or tracking information.</p>
+            <p>This creates a real test document in DTMS and may notify the configured signing accounts. The title will be marked [TEST]. It will not change this APP's local status or tracking information.</p>
             <div className="logout-actions">
               <button type="button" className="logout-cancel-btn" onClick={() => setShowDtmsTestConfirm(false)}>Cancel</button>
               <button type="button" className="logout-confirm-btn is-approve" onClick={handleDtmsTest}>Send test copy</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDtmsSubmitConfirm && (
+        <div className="logout-overlay show">
+          <div className="logout-modal" role="alertdialog" aria-modal="true">
+            <h3>Submit APP FY {fiscalYear} to DTMS?</h3>
+            <p>This sends the APP PDF to DTMS for sequential digital signatures: Supply → ARD → RD. It creates a real DTMS document and locks this APP while it is being signed.</p>
+            <div className="logout-actions">
+              <button type="button" className="logout-cancel-btn" onClick={() => setShowDtmsSubmitConfirm(false)}>Cancel</button>
+              <button type="button" className="logout-confirm-btn is-approve" onClick={submitApp} disabled={dtmsSubmitting}>
+                {dtmsSubmitting ? 'Sending…' : 'Submit to DTMS'}
+              </button>
             </div>
           </div>
         </div>

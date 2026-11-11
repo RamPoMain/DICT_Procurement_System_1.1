@@ -634,7 +634,10 @@ const sameOffice = (a, b) => {
 export function canSessionActOnRecord(record, session) {
   if (!session || !session.canApprove || !record) return false;
   if (getPpmpStatus(record) !== 'For Approval') return false;
-  if (record.dtms_track) return false; // approval happens in DTMS
+  if (record.dtms_track && (
+    !record.dtms_signing_complete ||
+    record.dtms_signed_file_track !== record.dtms_track
+  )) return false;
   if (record.currentApproverRole !== session.stage) return false;
   if (session.stage === 'HEAD') return sameOffice(record.end_user, session.headOf);
   return true;
@@ -718,23 +721,7 @@ export function submitPpmpForApproval(recordId, session, extra = null) {
   record.returned_for_revision = false;
   record.submission_round = (Number(record.submission_round) || 1) + (record.rejected_at ? 1 : 0);
 
-  if (session.stage === 'HEAD') {
-    // Unit Head submitting for their own unit: auto-endorses and skips HEAD stage to TOD
-    record.currentApproverRole = 'TOD';
-    if (!Array.isArray(record.remarksHistory)) record.remarksHistory = [];
-    record.remarksHistory.push({
-      stage: 'HEAD',
-      role: session.role,
-      name: session.roleName,
-      action: 'submitted',
-      round: record.submission_round,
-      remarks: 'Submitted by the Unit Head.',
-      date: new Date().toLocaleDateString(),
-      at: Date.now()
-    });
-  } else {
-    record.currentApproverRole = 'HEAD';
-  }
+  record.currentApproverRole = 'HEAD';
 
   record.submitted_by = {
     name: session.roleName,
@@ -809,6 +796,11 @@ export function performPpmpReviewAction(recordId, action, remarksText, session) 
       email: session.email,
       stage: session.stage
     };
+    if (record.dtms_track) {
+      record.dtms_rejected_track = record.dtms_track;
+      record.dtms_track = null;
+      record.dtms_signing_complete = false;
+    }
     message = `PPMP No. ${record.ppmp_no} rejected and returned to the requesting office.`;
   } else {
     // Approve

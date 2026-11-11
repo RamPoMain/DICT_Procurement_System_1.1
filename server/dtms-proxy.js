@@ -7,7 +7,8 @@ import multer from 'multer';
 
 const {
   DTMS_BASE_URL, DTMS_API_KEY, DTMS_ORIGIN, PORT = 3001,
-  APP_ORIGIN = 'http://localhost:5173',
+  APP_ORIGIN = 'http://localhost:3000',
+  APP_ORIGINS = '',
   TESTER_ORIGIN = 'http://127.0.0.1:5500'   // where Live Server opens index.html
 } = process.env;
 if (!DTMS_BASE_URL || !DTMS_API_KEY || !DTMS_ORIGIN) {
@@ -17,7 +18,13 @@ if (!DTMS_BASE_URL || !DTMS_API_KEY || !DTMS_ORIGIN) {
 const BASE = DTMS_BASE_URL.replace(/\/?$/, '/') + 'document/public/';
 console.log('Sending origin:', JSON.stringify(DTMS_ORIGIN));
 const dtmsHeaders = { 'X-API-Token': DTMS_API_KEY, Origin: DTMS_ORIGIN };
-const ALLOWED = [APP_ORIGIN, TESTER_ORIGIN];
+const ALLOWED = new Set(
+  [APP_ORIGIN, APP_ORIGINS, TESTER_ORIGIN]
+    .flatMap((origins) => origins.split(','))
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
+console.log('Allowed browser origins:', [...ALLOWED].join(', '));
 
 const app = express();
 
@@ -31,7 +38,7 @@ app.use((req, res, next) => {
 // Only your own web app and the tester page may call this proxy.
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && ALLOWED.includes(origin)) {
+  if (origin && ALLOWED.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'Content-Type');
