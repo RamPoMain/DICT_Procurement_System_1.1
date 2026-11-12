@@ -11,6 +11,7 @@ import {
 import { getNextPpmpNumber } from '../../utils/ppmpNumber.js';
 import {
   isAppFinal,
+  getAvailableFiscalYears,
   getRecordItems,
   getNewRequestTarget,
   newRequestBlockedMessage
@@ -24,11 +25,13 @@ function readRecords() {
   }
 }
 
-// Preserve any selected fiscal year within the available planning window.
+// Keep the selected fiscal year if it is open (in the rolling list, APP not final);
+// otherwise fall back to the first open year.
 function pickAllowedYear(preferred) {
-  const thisYear = new Date().getFullYear();
-  const y = Number(preferred);
-  return String(Number.isInteger(y) && y >= thisYear && y <= Math.min(thisYear + 10, 9999) ? y : thisYear);
+  const years = getAvailableFiscalYears();
+  const wanted = String(preferred);
+  if (years.includes(wanted) && !isAppFinal(wanted)) return wanted;
+  return years.find((year) => !isAppFinal(year)) || years[years.length - 1];
 }
 
 export default function BulkImportModal({ isOpen, onClose, headerData, recordId, onSuccess }) {
@@ -46,9 +49,12 @@ export default function BulkImportModal({ isOpen, onClose, headerData, recordId,
   const isAddingToExisting = !!recordId;
   const thisYear = new Date().getFullYear();
   const currentOffice = headerData?.end_user || user?.office || 'DICT';
+  // Rolling list: two open years at a time; a final APP adds the next two years.
+  // Recomputed each time the dialog opens, since an APP may have been finalized meanwhile.
   const yearOptions = useMemo(
-    () => Array.from({ length: Math.min(11, 10000 - thisYear) }, (_, index) => String(thisYear + index)),
-    [thisYear]
+    () => getAvailableFiscalYears(thisYear),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [thisYear, isOpen]
   );
   const isValidFiscalYear = yearOptions.includes(fiscalYear);
 
@@ -270,7 +276,11 @@ export default function BulkImportModal({ isOpen, onClose, headerData, recordId,
                       <label className="bi-type-field">
                         <span>Fiscal year</span>
                         <select value={fiscalYear} onChange={(e) => setFiscalYear(e.target.value)}>
-                          {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+                          {yearOptions.map((year) => (
+                            <option key={year} value={year} disabled={isAppFinal(year)}>
+                              {year}{isAppFinal(year) ? ' (APP final – closed)' : ''}
+                            </option>
+                          ))}
                         </select>
                       </label>
                       <label className="bi-type-field">

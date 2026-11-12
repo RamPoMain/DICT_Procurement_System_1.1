@@ -501,6 +501,24 @@ export function isAppFinal(year) {
   return getAppRecord(year).status === 'Completed';
 }
 
+// Fiscal years that are offered when creating a PPMP. The list starts with the current year and
+// the one after it. Whenever a year in the list has a final (Completed) APP, the two years after
+// it are added, so there are always two open years ahead. Years with a final APP stay in the list
+// (so the history is visible) but are closed for new PPMPs; use isFiscalYearClosed() to check.
+export function getAvailableFiscalYears(startYear = new Date().getFullYear(), maxYear = 9999) {
+  const start = Number(startYear);
+  let end = Math.min(start + 1, maxYear);
+  for (let year = start; year <= end; year += 1) {
+    if (isAppFinal(String(year))) end = Math.min(Math.max(end, year + 2), maxYear);
+  }
+  const years = [];
+  for (let year = start; year <= end; year += 1) years.push(String(year));
+  return years;
+}
+
+// A year whose APP is final cannot receive new PPMPs.
+export const isFiscalYearClosed = (year) => !!year && isAppFinal(String(year));
+
 // An APP only exists because approved PPMPs back it. When the last approved PPMP of a fiscal
 // year is deleted, a saved APP that is Final / under review for that year is stale (it would
 // still say "Final" with a Download PDF button but have nothing to compile), so drop it.

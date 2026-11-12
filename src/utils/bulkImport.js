@@ -12,6 +12,7 @@ import {
   getRecordItems,
   getPpmpStatus,
   isAppFinal,
+  getAvailableFiscalYears,
   getNewRequestTarget,
   newRequestBlockedMessage,
   carryOverItems
@@ -755,6 +756,10 @@ export function commitImportedItems({ items, headerData = {}, user, targetRecord
     endUser = headerData.end_user || user?.office || 'DICT';
     if (isAppFinal(fiscalYear)) {
       throw new Error(`The APP for FY ${fiscalYear} is already final, so a new PPMP cannot be created under it.`);
+    }
+    // Same rolling list as the request form: only the open years can receive a new PPMP.
+    if (!getAvailableFiscalYears().includes(fiscalYear)) {
+      throw new Error(`FY ${fiscalYear} is not open for new PPMPs yet. Choose one of the available fiscal years.`);
     }
 
     // Same rules as the request form, based on the latest PPMP of this office + fiscal year.

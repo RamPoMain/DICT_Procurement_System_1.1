@@ -26,6 +26,7 @@ import {
   buildBudgetMismatchMessage,
   performPpmpReviewAction,
   isAppFinal,
+  getAvailableFiscalYears,
   getNewRequestTarget,
   newRequestBlockedMessage as blockedMessage,
   carryOverItems,
@@ -62,13 +63,10 @@ const STEP_PROGRESS = [15, 45, 85];
 // plus collapsed spaces, so "Laptops" and "laptops " are the same entry.
 const normDesc = (s) => normalizeDescription(String(s || '').replace(/\s+/g, ' '));
 
-// Default to the first available fiscal year whose APP is not final.
+// Default to the first fiscal year in the rolling list whose APP is not final.
 function pickDefaultFiscalYear() {
-  const thisYear = new Date().getFullYear();
-  for (let year = thisYear; year <= Math.min(thisYear + 10, 9999); year += 1) {
-    if (!isAppFinal(String(year))) return String(year);
-  }
-  return String(thisYear);
+  const years = getAvailableFiscalYears();
+  return years.find((year) => !isAppFinal(year)) || years[years.length - 1];
 }
 
 export default function RequestModal({ isOpen, onClose, recordId = null, onSaved, onBulkImport }) {
@@ -291,12 +289,16 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
 
   if (!isOpen) return null;
 
-  // Offer a decade of planning years and preserve the year of an older PPMP when editing.
+  // Rolling fiscal years: two open years at a time; a final APP adds the next two years.
+  // Also preserve the year of an older PPMP when editing.
   const thisYear = new Date().getFullYear();
   const yearOptions = [...new Set([
-    ...Array.from({ length: Math.min(11, 10000 - thisYear) }, (_, index) => thisYear + index),
+    ...getAvailableFiscalYears(thisYear).map(Number),
     ...(recordId && currentRecord?.fiscal_year ? [Number(currentRecord.fiscal_year)] : [])
   ])].sort((a, b) => a - b).map(String);
+  // A closed year (final APP) is shown but cannot be picked, unless this PPMP already lives in it.
+  const isYearLocked = (year) =>
+    isAppFinal(year) && !(recordId && String(currentRecord?.fiscal_year) === year);
 
   // Closed = that year's APP is already final. A PPMP that already lives in that year can keep it;
   // a new PPMP (or an existing one being moved into it) cannot.
@@ -1207,7 +1209,11 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
                     clearError('fiscal_year');
                   }}
                 >
-                  {yearOptions.map(year => <option key={year} value={year}>{year}</option>)}
+                  {yearOptions.map(year => (
+                    <option key={year} value={year} disabled={isYearLocked(year)}>
+                      {year}{isYearLocked(year) ? ' (APP final – closed)' : ''}
+                    </option>
+                  ))}
                 </select>
                 {!isViewMode && fiscalYearIsClosed && <p className="text-45">{closedYearMessage}</p>}
                 {!isViewMode && !fiscalYearIsClosed && errors.fiscal_year && <p className="text-45">{errors.fiscal_year}</p>}
