@@ -29,8 +29,8 @@ A centralized web application developed for the **Department of Information and 
   - **Competitive Bidding (Sec. 15)**: ₱2,000,000.00 and above (or any eligible amount).
 - **Milestone Date Sequencing**: Strict chronological date validation (`Advertisement/Posting` -> `Bid Opening` -> `Notice of Award` -> `Contract Signing` -> `Delivery Period`).
 - **Deduplicated Total Budget**: Multiple re-bidding attempts sharing the same reference number count only once toward the total budget.
-- **Parallel Planning Lanes**: Requesting offices can maintain an active *Final* PPMP (current year) and an *Indicative* PPMP (next year) in parallel.
-- **Fiscal Year Rollover**: When the APP of a fiscal year is finalized and marked Complete by the Regional Director, the year is automatically closed against new requests, and subsequent requests default to the next open year.
+- **Parallel Planning Lanes**: Requesting offices can maintain active *Final* and *Indicative* PPMPs across current and future fiscal years.
+- **Fiscal Year Rollover**: The current fiscal year and the next 10 years are available when creating a PPMP. When an APP is finalized and marked Complete by the Regional Director, that year is closed against new requests, and subsequent requests default to the next open year.
 
 ### 3. Multi-Stage Approval Workflows
 - **PPMP Chain**: `Requesting Unit / Unit Head` -> `TOD (Technical Operations Division)` -> `Budget Officer` -> `RD (Regional Director)`.

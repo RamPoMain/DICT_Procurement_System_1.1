@@ -62,12 +62,13 @@ const STEP_PROGRESS = [15, 45, 85];
 // plus collapsed spaces, so "Laptops" and "laptops " are the same entry.
 const normDesc = (s) => normalizeDescription(String(s || '').replace(/\s+/g, ' '));
 
-// A new PPMP can only be planned for this year or next year. Default to the first one
-// whose APP is not yet final (falls back to this year, where the closed-year message shows).
+// Default to the first available fiscal year whose APP is not final.
 function pickDefaultFiscalYear() {
   const thisYear = new Date().getFullYear();
-  const open = [thisYear, thisYear + 1].find((y) => !isAppFinal(String(y)));
-  return String(open ?? thisYear);
+  for (let year = thisYear; year <= Math.min(thisYear + 10, 9999); year += 1) {
+    if (!isAppFinal(String(year))) return String(year);
+  }
+  return String(thisYear);
 }
 
 export default function RequestModal({ isOpen, onClose, recordId = null, onSaved, onBulkImport }) {
@@ -290,12 +291,10 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
 
   if (!isOpen) return null;
 
-  // Fiscal year choices: this year and next year only. When editing an existing PPMP, its own
-  // year stays in the list so the field never shows a value that is not an option.
+  // Offer a decade of planning years and preserve the year of an older PPMP when editing.
   const thisYear = new Date().getFullYear();
   const yearOptions = [...new Set([
-    thisYear,
-    thisYear + 1,
+    ...Array.from({ length: Math.min(11, 10000 - thisYear) }, (_, index) => thisYear + index),
     ...(recordId && currentRecord?.fiscal_year ? [Number(currentRecord.fiscal_year)] : [])
   ])].sort((a, b) => a - b).map(String);
 
@@ -319,7 +318,8 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
   const validateCurrentStep = () => {
     const errs = {};
     if (step === 1) {
-      if (!yearOptions.includes(String(headerData.fiscal_year))) errs.fiscal_year = 'Select a fiscal year.';
+      const fiscalYear = String(headerData.fiscal_year || '').trim();
+      if (!yearOptions.includes(fiscalYear)) errs.fiscal_year = 'Select a fiscal year from the available options.';
       else if (fiscalYearIsClosed) errs.fiscal_year = closedYearMessage;
       else if (newTarget?.mode === 'blocked') errs.fiscal_year = blockedMessage(newTarget.record, headerData.fiscal_year);
       if (!activeItem.project_description) errs.project_description = 'Description is required';
@@ -1198,6 +1198,7 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
               <div className={`field-group ${(errors.fiscal_year || fiscalYearIsClosed) ? 'error-state' : ''}`}>
                 <label>Fiscal Year</label>
                 <select
+                  required
                   value={headerData.fiscal_year}
                   disabled={isViewMode}
                   onChange={e => {
@@ -1206,7 +1207,7 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
                     clearError('fiscal_year');
                   }}
                 >
-                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                  {yearOptions.map(year => <option key={year} value={year}>{year}</option>)}
                 </select>
                 {!isViewMode && fiscalYearIsClosed && <p className="text-45">{closedYearMessage}</p>}
                 {!isViewMode && !fiscalYearIsClosed && errors.fiscal_year && <p className="text-45">{errors.fiscal_year}</p>}

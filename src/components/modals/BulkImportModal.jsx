@@ -24,11 +24,11 @@ function readRecords() {
   }
 }
 
-// Only this year and next year can be picked for a new PPMP.
+// Preserve any selected fiscal year within the available planning window.
 function pickAllowedYear(preferred) {
   const thisYear = new Date().getFullYear();
   const y = Number(preferred);
-  return String(y === thisYear || y === thisYear + 1 ? y : thisYear);
+  return String(Number.isInteger(y) && y >= thisYear && y <= Math.min(thisYear + 10, 9999) ? y : thisYear);
 }
 
 export default function BulkImportModal({ isOpen, onClose, headerData, recordId, onSuccess }) {
@@ -46,6 +46,11 @@ export default function BulkImportModal({ isOpen, onClose, headerData, recordId,
   const isAddingToExisting = !!recordId;
   const thisYear = new Date().getFullYear();
   const currentOffice = headerData?.end_user || user?.office || 'DICT';
+  const yearOptions = useMemo(
+    () => Array.from({ length: Math.min(11, 10000 - thisYear) }, (_, index) => String(thisYear + index)),
+    [thisYear]
+  );
+  const isValidFiscalYear = yearOptions.includes(fiscalYear);
 
   // Start fresh every time the dialog opens (it stays mounted on the Dashboard).
   useEffect(() => {
@@ -92,12 +97,6 @@ export default function BulkImportModal({ isOpen, onClose, headerData, recordId,
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isOpen, isAddingToExisting, headerData?.ppmp_no, currentOffice, fiscalYear, plan]
-  );
-
-  // Fiscal years a new PPMP can be planned for: this year and next year only.
-  const yearOptions = useMemo(
-    () => [String(thisYear), String(thisYear + 1)],
-    [thisYear]
   );
 
   const yearIsClosed = !isAddingToExisting && isOpen && isAppFinal(fiscalYear);
@@ -249,7 +248,7 @@ export default function BulkImportModal({ isOpen, onClose, headerData, recordId,
                     type="button"
                     className="bi-btn is-secondary"
                     onClick={handleDownload}
-                    disabled={downloading}
+                    disabled={downloading || !isValidFiscalYear}
                   >
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="none">
                       <path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -271,7 +270,7 @@ export default function BulkImportModal({ isOpen, onClose, headerData, recordId,
                       <label className="bi-type-field">
                         <span>Fiscal year</span>
                         <select value={fiscalYear} onChange={(e) => setFiscalYear(e.target.value)}>
-                          {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+                          {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
                         </select>
                       </label>
                       <label className="bi-type-field">
@@ -435,7 +434,7 @@ export default function BulkImportModal({ isOpen, onClose, headerData, recordId,
                 {reviewResult.ready.length > 0 ? 'Cancel' : 'Close'}
               </button>
               {reviewResult.ready.length > 0 && (
-                <button type="button" className="bi-btn" onClick={handleImport} disabled={yearIsClosed || planBlocked}>
+                <button type="button" className="bi-btn" onClick={handleImport} disabled={!isValidFiscalYear || yearIsClosed || planBlocked}>
                   Import {reviewResult.ready.length} {reviewResult.ready.length === 1 ? 'item' : 'items'}
                 </button>
               )}
