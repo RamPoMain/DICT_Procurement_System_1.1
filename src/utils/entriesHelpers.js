@@ -12,6 +12,7 @@ import {
   isAppFinal,
   isLatestApprovedCarryoverSource
 } from './procurementRules.js';
+import { canActOnApp } from './dashboardHelpers.js';
 
 export const GENERAL_REQUIREMENT_OPTIONS = [
   'General Requirements',
@@ -114,9 +115,10 @@ export function getAppButtonInfo(user, records) {
   const app = getAppRecord(year);
   let label = 'Annual Procurement Plan (APP)';
 
-  if (user?.role === 'ARD' && app.status === 'For Approval' && app.currentApproverRole === 'ARD') {
+  // Action labels only appear once the previous DTMS signature is back (canActOnApp).
+  if (user?.role === 'ARD' && canActOnApp(app, user)) {
     label = `Review APP FY ${year} (Action Needed)`;
-  } else if (user?.role === 'RD' && app.status === 'For Approval' && app.currentApproverRole === 'RD') {
+  } else if (user?.role === 'RD' && canActOnApp(app, user)) {
     label = `Review APP FY ${year} (Final Action)`;
   } else if (app.status === 'Completed') {
     label = `Final APP FY ${year} (Approved)`;
