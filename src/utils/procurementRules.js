@@ -2,6 +2,8 @@
 // PROCUREMENT RULES & CALCULATION ENGINE
 // ============================================================
 
+import { notifyPpmpChange, notifyAppChange } from './flowNotify.js';
+
 export const APPROVAL_CHAIN = [
   { role: 'HEAD', label: 'Unit Head' },
   { role: 'TOD',  label: 'Technical Operations Division' },
@@ -492,9 +494,13 @@ export function getAppRecord(fiscalYear) {
 export function saveAppRecord(record) {
   const all = getAllAppRecords();
   const idx = all.findIndex(r => String(r.fiscal_year) === String(record.fiscal_year));
+  const before = idx !== -1
+    ? { status: all[idx].status, stage: all[idx].currentApproverRole }
+    : { status: 'Draft', stage: null };
   if (idx !== -1) all[idx] = record;
   else all.push(record);
   localStorage.setItem('app_records', JSON.stringify(all));
+  notifyAppChange(record, before);
 }
 
 export function isAppFinal(year) {
@@ -754,6 +760,8 @@ export function submitPpmpForApproval(recordId, session, extra = null) {
     return { success: false, error: 'Could not submit for approval — please try again.' };
   }
 
+  notifyPpmpChange(record, { status: 'Draft', stage: null });
+
   return {
     success: true,
     record,
@@ -770,6 +778,7 @@ export function performPpmpReviewAction(recordId, action, remarksText, session) 
   if (idx === -1) return { success: false, error: 'Record not found.' };
 
   const record = all[idx];
+  const before = { status: record.status, stage: record.currentApproverRole };
   if (getPpmpStatus(record) !== 'For Approval') {
     return { success: false, error: 'This PPMP must be submitted for approval before it can be reviewed.' };
   }
@@ -849,5 +858,6 @@ export function performPpmpReviewAction(recordId, action, remarksText, session) 
     return { success: false, error: 'Could not save review decision.' };
   }
 
+  if (action !== 'comment') notifyPpmpChange(record, before);
   return { success: true, record, message, action };
 }

@@ -4,6 +4,7 @@
 // Run:  npm start        (Node 20.6+)
 import express from 'express';
 import multer from 'multer';
+import { createApiRouter } from './admin-api.js';
 
 const {
   DTMS_BASE_URL, DTMS_API_KEY, DTMS_ORIGIN, PORT = 3001,
@@ -27,6 +28,8 @@ const ALLOWED = new Set(
 console.log('Allowed browser origins:', [...ALLOWED].join(', '));
 
 const app = express();
+
+app.use('/api', createApiRouter());
 
 // Log every request
 app.use((req, res, next) => {

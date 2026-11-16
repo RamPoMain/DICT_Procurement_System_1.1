@@ -11,18 +11,21 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       setError('Please fill in all fields.');
       return;
     }
-    const success = login(email, password);
-    if (success) {
-      navigate('/');
+    setSubmitting(true);
+    const result = await login(email, password);
+    setSubmitting(false);
+    if (result.ok) {
+      navigate(result.user?.canAdmin ? '/admin' : '/');
     } else {
-      setError('Invalid email or password.');
+      setError(result.error || 'Invalid email or password.');
     }
   };
 
@@ -56,7 +59,7 @@ export default function Login() {
                 <input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(''); }} placeholder="••••••••" />
               </div>
 
-              <button type="submit" className="login-submit">Sign In</button>
+              <button type="submit" className="login-submit" disabled={submitting}>{submitting ? 'Signing in…' : 'Sign In'}</button>
             </form>
           </div>
         </div>

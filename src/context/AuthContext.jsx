@@ -1,145 +1,70 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  apiLogin, apiMe, getToken, setToken, clearToken,
+  refreshFlow, clearFlowCache
+} from '../utils/adminApi.js';
 
-export const ACCOUNTS = [
-  {
-    email: 'ILCDB@dict.gov.ph',
-    password: '1',
-    role: 'ILCDB',
-    roleName: 'ILCDB',
-    office: 'ICT Literacy Competency and Development bureau',
-    canRequest: true
-  },
-  {
-    email: 'FPIAP@dict.gov.ph',
-    password: '1',
-    role: 'FPIAP',
-    roleName: 'FPIAP',
-    office: 'Free Public Internet Access Program',
-    canRequest: true
-  },
-  {
-    email: 'GASS@dict.gov.ph',
-    password: '1',
-    role: 'GASS',
-    roleName: 'GASS',
-    office: 'General Administration and Support Services',
-    canRequest: true
-  },
-  {
-    email: 'FPIAPHEAD@dict.gov.ph',
-    password: '1',
-    role: 'FPIAPH',
-    roleName: 'FPIAP Head',
-    office: 'Free Public Internet Access Program',
-    canRequest: true,
-    canApprove: true,
-    stage: 'HEAD',
-    headOf: 'Free Public Internet Access Program'
-  },
-  {
-    email: 'ILCDBHEAD@dict.gov.ph',
-    password: '1',
-    role: 'ILCDBH',
-    roleName: 'ILCDB Head',
-    office: 'ICT Literacy Competency and Development bureau',
-    canRequest: true,
-    canApprove: true,
-    stage: 'HEAD',
-    headOf: 'ICT Literacy Competency and Development bureau'
-  },
-  {
-    email: 'GASSHEAD@dict.gov.ph',
-    password: '1',
-    role: 'GASSH',
-    roleName: 'GASS Head',
-    office: 'General Administration and Support Services',
-    canRequest: true,
-    canApprove: true,
-    stage: 'HEAD',
-    headOf: 'General Administration and Support Services'
-  },
-  {
-    email: 'tod@dict.gov.ph',
-    password: '1',
-    role: 'TOD',
-    roleName: 'Technical Operations Division',
-    office: 'Technical Operations Division',
-    canApprove: true,
-    stage: 'TOD'
-  },
-  {
-    email: 'BudgetOfficer@dict.gov.ph',
-    password: '1',
-    role: 'BO',
-    roleName: 'Budget Officer',
-    office: 'Budget Office',
-    canApprove: true,
-    stage: 'BO'
-  },
-  {
-    email: 'ard@dict.gov.ph',
-    password: '1',
-    role: 'ARD',
-    roleName: 'Assistant Regional Director',
-    canApprove: true,
-    stage: 'RD' // For PPMP stage
-  },
-  {
-    email: 'rd@dict.gov.ph',
-    password: '1',
-    role: 'RD',
-    roleName: 'Regional Director',
-    canApprove: true,
-    stage: 'RD'
-  },
-  {
-    email: 'supply@dict.gov.ph',
-    password: '1',
-    role: 'SUP',
-    roleName: 'Supply',
-    canRequest: false,
-    canApprove: false,
-    canTrackApprovals: true
-  },
-  {
-    email: 'test@dict.gov.ph',
-    password: '1',
-    role: 'POP',
-    roleName: 'POP (Test Account)',
-    office: 'POP Test Office',
-    canRequest: true,
-    canApprove: false
-  }
-];
+// Accounts now live on the server (Admin page). Kept only so old imports do not break.
+export const ACCOUNTS = [];
 
+const SESSION_KEY = 'dashboard_session';
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const s = JSON.parse(localStorage.getItem('dashboard_session'));
-      if (!s?.email) return null;
-      const acct = ACCOUNTS.find(a => a.email.toLowerCase() === s.email.toLowerCase());
-      return acct ? { ...acct, id: acct.email.toLowerCase() } : null;
-    } catch {
-      return null;
-    }
-  });
+function readCachedUser() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY));
+    return s?.email && getToken() ? s : null;
+  } catch {
+    return null;
+  }
+}
 
-  const login = (email, password) => {
-    const acct = ACCOUNTS.find(
-      a => a.email.toLowerCase() === email.trim().toLowerCase() && a.password === password
-    );
-    if (!acct) return false;
-    const sessionObj = { ...acct, id: acct.email.toLowerCase() };
-    localStorage.setItem('dashboard_session', JSON.stringify(sessionObj));
-    setUser(sessionObj);
-    return true;
+export function AuthProvider({ children }) {
+  const [user, setUserState] = useState(readCachedUser);
+
+  const setUser = (u) => {
+    if (u) localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+    else localStorage.removeItem(SESSION_KEY);
+    setUserState(u);
   };
 
   const logout = () => {
-    localStorage.removeItem('dashboard_session');
+    clearToken();
+    clearFlowCache();
     setUser(null);
+  };
+
+  // Re-check the saved session with the server (account may have been changed or deactivated),
+  // and load the approval-flow settings used for DTMS signers.
+  useEffect(() => {
+    if (!getToken()) return undefined;
+    let cancelled = false;
+    apiMe()
+      .then(({ user: fresh }) => { if (!cancelled) setUser(fresh); })
+      .catch((err) => { if (!cancelled && err.status === 401) logout(); });
+    refreshFlow().catch(() => {});
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && getToken()) refreshFlow().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Returns { ok: true } or { ok: false, error }.
+  const login = async (email, password) => {
+    try {
+      const { token, user: signedIn } = await apiLogin(email.trim(), password);
+      setToken(token);
+      setUser(signedIn);
+      refreshFlow().catch(() => {});
+      return { ok: true, user: signedIn };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   };
 
   // Helper checking if user can act on a specific PPMP record
@@ -158,9 +83,11 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user,
+      setUser,
       login,
       logout,
       canActOnRecord,
+      isAdmin: !!user?.canAdmin,
       isAppAuthorized: ['SUP', 'ARD', 'RD'].includes(user?.role)
     }}>
       {children}

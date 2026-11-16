@@ -2,6 +2,8 @@
 import { APPROVAL_CHAIN, getPpmpStatus, recordApprovedPpmpNumber, getPpmpSubmitError, submitPpmpForApproval, getAllAppRecords, getAppRecord, saveAppRecord } from './procurementRules.js';
 import { buildPPMP_PDF_Blob, previewAPP_PDF } from './pdfGenerator.js';
 import FileStore from './fileStore.js';
+import { getCachedFlow } from './adminApi.js';
+import { notifyPpmpChange } from './flowNotify.js';
 
 const PROXY = import.meta.env?.VITE_DTMS_PROXY || 'http://localhost:3001/api/dtms';
 
@@ -50,7 +52,23 @@ export const APP_SIGNERS = [
 
 const normalizeOffice = (office) => String(office || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
+// Signer emails come from the Admin page (saved on the server). The constants above are the
+// fallback used only before the first successful load of that setting.
+function getConfiguredPpmpSigner(record, stage) {
+  const cfg = getCachedFlow()?.ppmp;
+  if (!cfg) return '';
+  if (stage === 'HEAD') {
+    const office = normalizeOffice(record.end_user);
+    const match = Object.entries(cfg.HEAD?.offices || {})
+      .find(([name]) => normalizeOffice(name) === office)?.[1];
+    return match?.signer || cfg.HEAD?.default?.signer || '';
+  }
+  return cfg[stage]?.signer || '';
+}
+
 function getPpmpSignerEmail(record, stage) {
+  const configured = getConfiguredPpmpSigner(record, stage);
+  if (configured) return configured;
   const office = normalizeOffice(record.end_user);
   if (stage === 'HEAD') {
     return Object.entries(PPMP_SIGNERS.HEAD)
@@ -72,7 +90,7 @@ export function buildAppSignatories(stage = 'SUP') {
   if (!APP_DTMS_STAGES.some((step) => step.role === stage)) {
     throw new Error(`APP stage "${stage}" does not sign in DTMS.`);
   }
-  const email = APP_SIGNERS.find((s) => s.key === stage)?.email;
+  const email = getCachedFlow()?.app?.[stage]?.signer || APP_SIGNERS.find((s) => s.key === stage)?.email;
   if (!email) throw new Error(`No DTMS email configured for APP step "${stage}".`);
   return [{ email, role: DTMS_ROLE.APP, order: 0 }];
 }
@@ -390,7 +408,12 @@ export function applyDtmsStatus(record, dtms) {
     record.dtms_signing_complete = false;
     record.dtms_review_remarks = '';
   }
-  return before !== JSON.stringify([record.status, record.currentApproverRole, record.dtms_last]);
+  const changed = before !== JSON.stringify([record.status, record.currentApproverRole, record.dtms_last]);
+  if (changed) {
+    const [prevStatus, prevStage] = JSON.parse(before);
+    notifyPpmpChange(record, { status: prevStatus, stage: prevStage });
+  }
+  return changed;
 }
 
 // Copy DTMS state into the local APP record. Mirrors applyDtmsStatus for PPMPs: each DTMS document
