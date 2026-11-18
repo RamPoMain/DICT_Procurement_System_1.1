@@ -25,6 +25,21 @@ export async function connectMySql() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY,
+        email VARCHAR(320) NOT NULL UNIQUE,
+        account_type VARCHAR(32) NOT NULL,
+        role_code VARCHAR(64) NOT NULL DEFAULT '',
+        role_name VARCHAR(255) NOT NULL DEFAULT '',
+        office VARCHAR(255) NOT NULL DEFAULT '',
+        password_hash VARCHAR(256) NOT NULL,
+        active TINYINT(1) NOT NULL DEFAULT 1,
+        must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS procurement_records (
         collection_name VARCHAR(64) NOT NULL,
         record_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,

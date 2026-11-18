@@ -42,9 +42,11 @@ A centralized web application developed for the **Department of Information and 
 - **Audit Trails**: Full review history tracking approver role, date, decision (Approve / Reject / Remark), and mandatory returned remarks.
 
 ### 4. Shared Storage & Large File Management
-- **MySQL**: Accounts, PPMP records, APP records, and approval settings are persisted in the shared database.
-- **MySQL uploads**: Uploaded supporting documents and DTMS-signed files are stored as binary data in a separate table.
-- **Legacy migration**: On the first authenticated connection, existing browser PPMP/APP records are copied into MySQL; existing JSON account/settings data is imported at server startup. Data stored in a previous MongoDB deployment must be exported and migrated separately.
+- **`accounts` table**: Account profile and scrypt password hashes (never plaintext passwords).
+- **`procurement_records` table**: PPMP and APP records, stored as JSON text and ordered by position.
+- **`system_state` table**: Approval flow, session-signing secret, audit history, and shared-data initialization state.
+- **`uploads` table**: Supporting documents and DTMS-signed files, stored as binary `LONGBLOB` data.
+- **Legacy migration**: On the first authenticated connection, existing browser PPMP/APP records are copied into MySQL; existing JSON account/settings data is imported at server startup.
 
 ### 5. Document Generation & Export Engines
 - **GPPB-Compliant PDF Generator**:

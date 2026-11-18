@@ -180,12 +180,56 @@ function parseJson(value) {
   return typeof value === 'string' ? JSON.parse(value) : value;
 }
 
-function saveStore() {
-  return storeCollection.execute(
-    `INSERT INTO system_state (state_key, state_value) VALUES ('system', ?)
-     ON DUPLICATE KEY UPDATE state_value = VALUES(state_value)`,
-    [JSON.stringify(store)]
-  );
+function accountFromRow(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    type: row.account_type,
+    role: row.role_code,
+    roleName: row.role_name,
+    office: row.office,
+    passwordHash: row.password_hash,
+    active: !!row.active,
+    mustChangePassword: !!row.must_change_password,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at)
+  };
+}
+
+async function saveStore() {
+  const connection = await storeCollection.getConnection();
+  const { accounts, ...state } = store;
+  let transactionStarted = false;
+  try {
+    await connection.beginTransaction();
+    transactionStarted = true;
+    await connection.execute(
+      `INSERT INTO system_state (state_key, state_value) VALUES ('system', ?)
+       ON DUPLICATE KEY UPDATE state_value = VALUES(state_value)`,
+      [JSON.stringify(state)]
+    );
+    await connection.execute('DELETE FROM accounts');
+    for (const account of accounts) {
+      await connection.execute(
+        `INSERT INTO accounts
+          (id, email, account_type, role_code, role_name, office, password_hash,
+           active, must_change_password, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          account.id, account.email, account.type, account.role || '', account.roleName || '',
+          account.office || '', account.passwordHash, account.active === false ? 0 : 1,
+          account.mustChangePassword ? 1 : 0, account.createdAt || 0, account.updatedAt || 0
+        ]
+      );
+    }
+    await connection.commit();
+    transactionStarted = false;
+  } catch (error) {
+    if (transactionStarted) await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 function bootstrapAdminPassword() {
@@ -231,9 +275,12 @@ async function initStore(db) {
   const saved = rows[0] && parseJson(rows[0].state_value);
   if (saved) {
     store = saved;
+    const [accountRows] = await db.execute('SELECT * FROM accounts');
+    const legacyAccounts = Array.isArray(store.accounts) ? store.accounts : [];
+    store.accounts = accountRows.length ? accountRows.map(accountFromRow) : legacyAccounts;
     const seedChanged = bootstrapSeedPasswords();
     const adminChanged = bootstrapAdminPassword();
-    if (seedChanged || adminChanged) await saveStore();
+    if (seedChanged || adminChanged || (!accountRows.length && legacyAccounts.length)) await saveStore();
     return;
   }
 
