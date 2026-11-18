@@ -41,6 +41,7 @@ import { exportPPMP_Excel } from '../utils/entriesExport';
 import ExportMenu from '../components/entries/ExportMenu.jsx';
 import { generatePPMP_PDF } from '../utils/pdfGenerator.js';
 import { syncAllWithDtms, submitPpmpViaDtms } from '../utils/dtmsClient.js';
+import { refreshRemoteData } from '../utils/adminApi.js';
 import "../assets/styles/ppmp-inline-edit.css";
 
 const STAGE_LABELS = { HEAD: 'Unit Head', TOD: 'TOD', BO: 'Budget Officer', RD: 'Regional Director' };
@@ -159,11 +160,12 @@ export default function Entries() {
       if (dirtyRef.current || dtmsSyncInFlightRef.current) return; // don't reload while editing or already syncing
       dtmsSyncInFlightRef.current = true;
       try {
+        if (await refreshRemoteData(() => !dirtyRef.current) && alive) loadData();
         if (await syncAllWithDtms() && alive) loadData();
       } catch (e) {
         if (alive) {
           loadData();
-          setToast(`DTMS sync issue: ${e.message}`);
+          setToast(`Shared database or DTMS sync issue: ${e.message}`);
         }
       } finally {
         dtmsSyncInFlightRef.current = false;

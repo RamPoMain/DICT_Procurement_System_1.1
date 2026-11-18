@@ -41,9 +41,10 @@ A centralized web application developed for the **Department of Information and 
   - Final approval and marking as Final by the **Regional Director (`RD`)**.
 - **Audit Trails**: Full review history tracking approver role, date, decision (Approve / Reject / Remark), and mandatory returned remarks.
 
-### 4. Native Storage & Large File Management
-- **IndexedDB `FileStore`**: Stores up to 50MB of raw document blobs (PDFs, Scope of Work, Technical Specs) natively in the browser without filling `localStorage`.
-- **System Persistence**: State persistence for dark/light themes, offline sessions, and sequential approval logs.
+### 4. Shared Storage & Large File Management
+- **MySQL**: Accounts, PPMP records, APP records, and approval settings are persisted in the shared database.
+- **MySQL uploads**: Uploaded supporting documents and DTMS-signed files are stored as binary data in a separate table.
+- **Legacy migration**: On the first authenticated connection, existing browser PPMP/APP records are copied into MySQL; existing JSON account/settings data is imported at server startup. Data stored in a previous MongoDB deployment must be exported and migrated separately.
 
 ### 5. Document Generation & Export Engines
 - **GPPB-Compliant PDF Generator**:
@@ -69,7 +70,8 @@ A centralized web application developed for the **Department of Information and 
 - **Routing**: React Router DOM v6
 - **Spreadsheet Processing**: ExcelJS & SheetJS (xlsx)
 - **PDF Generation**: jsPDF & jsPDF-AutoTable
-- **Local Database**: IndexedDB (Native Blob API) + LocalStorage
+- **Database**: MySQL (records, accounts, settings, and uploaded files)
+- **Browser storage**: LocalStorage cache for procurement records and UI preferences
 
 ---
 
@@ -77,7 +79,7 @@ A centralized web application developed for the **Department of Information and 
 
 ### Prerequisites
 
-Ensure you have **Node.js (v18.0.0 or higher)** and **npm** installed on your system.
+Ensure you have **Node.js (v20.19.0 or higher)** and **npm** installed on your system.
 
 ```bash
 node -v
@@ -96,11 +98,20 @@ cd DICT_Procurement_System
 2. Install dependencies:
 ```bash
 npm install
+npm --prefix server install
 ```
+
+3. Configure MySQL and the server:
+Copy `server/env.example.txt` to `server/.env`, set `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE` for an existing MySQL database, and set a private `SESSION_SECRET`, `ADMIN_PASSWORD`, and `SEED_PASSWORD`. On initial MySQL setup, `ADMIN_PASSWORD` bootstraps the admin account and `SEED_PASSWORD` bootstraps migrated non-admin accounts once; affected accounts are required to change their password at sign-in. These values do not reset accounts on every server restart. Keep `.env` private and never commit it. The server creates the required tables when it starts; create the database itself beforehand. Set the MySQL server's `max_allowed_packet` to at least 64 MB to support the existing 50 MB file-upload limit.
 
 ### Running Locally
 
-Start the local development server:
+Start the API server (MySQL must be reachable):
+```bash
+npm run server
+```
+
+In another terminal, start the web app:
 ```bash
 npm run dev
 ```
@@ -114,9 +125,9 @@ http://localhost:3000/
 
 The **Test DTMS Send** button appears while viewing a PPMP or APP. It uploads a PDF marked `[TEST]` through the server proxy using the configured signer accounts in `src/utils/dtmsClient.js`. A successful test send creates a real DTMS document and can notify those accounts, but it does not change the local approval status.
 
-Configure `server/.env` from `server/env.example.txt` with the DTMS base URL, API key, registered DTMS origin, and the web app origin (`http://localhost:3000` for the local Vite app). Add any other exact browser origins to the optional comma-separated `APP_ORIGINS` value. Keep the API key only in `server/.env`. Then install and start the proxy from the `server` directory with `npm install` and `npm start`; restart the proxy after changing its environment settings, and run the web app separately with `npm run dev`.
+For DTMS integration, set the DTMS base URL, API key, registered DTMS origin, and the web app origin (`http://localhost:3000`) in `server/.env`. Add other exact browser origins to the optional comma-separated `APP_ORIGINS` value. Keep the API key only in `server/.env`. DTMS is optional for local database use; DTMS endpoints return an error until configured.
 
-PPMPs use a one-stage-at-a-time handoff: the requester submits to DTMS for the Department Head's signature; after the signed PDF returns to the Procurement System, TOD reviews it in the system and sends it to DTMS for TOD's signature; Budget Officer then reviews and sends it for their DTMS signature; the final signed copy returns to the system for the RD's local approval. APPs follow the same one-stage-at-a-time handoff: Supply submits to DTMS for Supply's signature; after the signed PDF returns, the ARD reviews it in the system and sends it to DTMS for the ARD's signature; the RD then reviews the ARD-signed copy and sends it to DTMS for the RD's signature, and the APP becomes Final once the RD-signed PDF returns. The APP review dialog shows the DTMS-signed copy, and each signature is added to the APP's review history and signature block. The Entries page polls DTMS every 45 seconds and rechecks when the browser regains focus; sync failures are shown in the page notification. After each PPMP signing stage, it stores the signed PDF in browser IndexedDB, where it can be previewed and downloaded from the PPMP view. Set each signer to the correct active DTMS account in `src/utils/dtmsClient.js` before production; the current local configuration temporarily points all steps to the same DTMS account. Because this app currently stores records in browser `localStorage` and files in browser IndexedDB, these updates are only available in that browser; multi-user deployment needs shared server-side persistence.
+PPMPs use a one-stage-at-a-time handoff: the requester submits to DTMS for the Department Head's signature; after the signed PDF returns to the Procurement System, TOD reviews it in the system and sends it to DTMS for TOD's signature; Budget Officer then reviews and sends it for their DTMS signature; the final signed copy returns to the system for the RD's local approval. APPs follow the same one-stage-at-a-time handoff: Supply submits to DTMS for Supply's signature; after the signed PDF returns, the ARD reviews it in the system and sends it to DTMS for the ARD's signature; the RD then reviews the ARD-signed copy and sends it to DTMS for the RD's signature, and the APP becomes Final once the RD-signed PDF returns. The APP review dialog shows the DTMS-signed copy, and each signature is added to the APP's review history and signature block. The Entries page polls DTMS every 45 seconds and rechecks when the browser regains focus; sync failures are shown in the page notification. Signed PDFs and supporting documents are stored in MySQL and can be previewed or downloaded from the PPMP/APP views. Set each signer to the correct active DTMS account in `src/utils/dtmsClient.js` before production; the current local configuration temporarily points all steps to the same DTMS account.
 
 ### Building for Production
 
@@ -167,7 +178,7 @@ dict-procurement-react/
 │   │   ├── AuthContext.jsx         # Authentication, accounts, & permissions
 │   │   └── ThemeContext.jsx        # Dark / Light theme state
 │   ├── utils/
-│   │   ├── fileStore.js            # IndexedDB document storage
+│   │   ├── fileStore.js            # MySQL file API + legacy browser-file migration
 │   │   ├── procurementRules.js     # RA 12009 rules, failed biddings & calculations
 │   │   ├── pdfGenerator.js         # jsPDF PPMP & APP generators
 │   │   ├── entriesExport.js        # ExcelJS styled PPMP workbooks

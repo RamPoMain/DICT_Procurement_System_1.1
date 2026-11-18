@@ -29,6 +29,7 @@ import {
   canActOnApp
 } from '../utils/dashboardHelpers';
 import { syncAllWithDtms } from '../utils/dtmsClient.js';
+import { refreshRemoteData } from '../utils/adminApi.js';
 import { deleteRecordById } from '../utils/entriesHelpers.js';
 import { generateAPP_PDF } from '../utils/pdfGenerator';
 import { exportStandardAppExcel, exportPhilGepsAppExcel, exportAppTemplateExcel, EXPORT_ROLES } from '../utils/appTemplateExport';
@@ -104,6 +105,11 @@ export default function Dashboard() {
   useEffect(() => {
     let alive = true;
     const run = async () => {
+      try {
+        if (await refreshRemoteData() && alive) loadData();
+      } catch (e) {
+        console.warn('Shared database sync failed:', e.message);
+      }
       try {
         if (await syncAllWithDtms() && alive) loadData();
       } catch (e) {

@@ -1,6 +1,6 @@
 // Accounts, sign-in, approval-flow settings and e-mail notifications.
 // Mounted by dtms-proxy.js:  app.use('/api', createApiRouter());
-// Built-ins only (express + node:crypto). e-mail needs the optional `nodemailer` package.
+// e-mail needs the optional `nodemailer` package.
 import express from 'express';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const STORE_FILE = path.join(DATA_DIR, 'store.json');
+const RECORD_COLLECTION = 'procurement_records';
+const APP_COLLECTION = 'app_records';
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -148,6 +150,7 @@ function verifyPassword(password, stored) {
 const DUMMY_HASH = hashPassword('not-a-real-password');
 
 let store = null;
+let storeCollection = null;
 const b64 = (buf) => Buffer.from(buf).toString('base64url');
 function signToken(accountId) {
   const body = b64(JSON.stringify({ sub: accountId, exp: Date.now() + TOKEN_TTL_MS }));
@@ -171,23 +174,80 @@ function readToken(token) {
 const getSecret = () => process.env.SESSION_SECRET || store.secret;
 
 // ---------------------------------------------------------------------------
-// Storage (one JSON file, written atomically)
+// Account, session-secret and approval-flow storage
 // ---------------------------------------------------------------------------
-function saveStore() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const tmp = `${STORE_FILE}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(store, null, 2));
-  fs.renameSync(tmp, STORE_FILE);
+function parseJson(value) {
+  return typeof value === 'string' ? JSON.parse(value) : value;
 }
 
-function initStore() {
+function saveStore() {
+  return storeCollection.execute(
+    `INSERT INTO system_state (state_key, state_value) VALUES ('system', ?)
+     ON DUPLICATE KEY UPDATE state_value = VALUES(state_value)`,
+    [JSON.stringify(store)]
+  );
+}
+
+function bootstrapAdminPassword() {
+  const password = process.env.ADMIN_PASSWORD;
+  if (!password || store.adminPasswordBootstrapApplied) return false;
+  if (password.length < 8) throw new Error('ADMIN_PASSWORD must be at least 8 characters.');
+
+  const email = (process.env.ADMIN_EMAIL || 'admin@dict.gov.ph').trim().toLowerCase();
+  const account = store.accounts.find((a) => a.type === 'admin' && a.email.toLowerCase() === email)
+    || store.accounts.find((a) => a.type === 'admin' && a.active !== false);
+  if (!account) throw new Error('Cannot apply ADMIN_PASSWORD: no active administrator account exists.');
+
+  account.passwordHash = hashPassword(password);
+  account.mustChangePassword = true;
+  account.updatedAt = Date.now();
+  store.adminPasswordBootstrapApplied = true;
+  audit(account, 'password.bootstrap', 'Administrator password initialized from server configuration.');
+  return true;
+}
+
+function bootstrapSeedPasswords() {
+  const password = process.env.SEED_PASSWORD;
+  if (!password || store.seedPasswordBootstrapApplied) return false;
+  if (password.length < 8) throw new Error('SEED_PASSWORD must be at least 8 characters.');
+
+  const keepAdminPassword = !!store.adminPasswordBootstrapApplied;
+  const now = Date.now();
+  for (const account of store.accounts) {
+    if (keepAdminPassword && account.type === 'admin') continue;
+    account.passwordHash = hashPassword(password);
+    account.mustChangePassword = true;
+    account.updatedAt = now;
+  }
+  store.seedPasswordBootstrapApplied = true;
+  if (!Array.isArray(store.audit)) store.audit = [];
+  audit({ email: 'system' }, 'password.seed-bootstrap', 'Account passwords initialized from server configuration.');
+  return true;
+}
+
+async function initStore(db) {
+  storeCollection = db;
+  const [rows] = await db.execute('SELECT state_value FROM system_state WHERE state_key = ?', ['system']);
+  const saved = rows[0] && parseJson(rows[0].state_value);
+  if (saved) {
+    store = saved;
+    const seedChanged = bootstrapSeedPasswords();
+    const adminChanged = bootstrapAdminPassword();
+    if (seedChanged || adminChanged) await saveStore();
+    return;
+  }
+
   try {
     store = JSON.parse(fs.readFileSync(STORE_FILE, 'utf8'));
   } catch {
     store = null;
   }
   if (store && Array.isArray(store.accounts)) {
-    if (!store.secret) { store.secret = crypto.randomBytes(32).toString('hex'); saveStore(); }
+    if (!store.secret) store.secret = crypto.randomBytes(32).toString('hex');
+    bootstrapSeedPasswords();
+    bootstrapAdminPassword();
+    await saveStore();
+    console.log(`[admin] Migrated accounts and settings from ${STORE_FILE} to MySQL.`);
     return;
   }
 
@@ -220,8 +280,10 @@ function initStore() {
     flow: defaultFlow(),
     audit: []
   };
-  saveStore();
-  console.log(`[admin] Created ${STORE_FILE} with ${store.accounts.length} accounts. Administrator: ${adminEmail}`);
+  bootstrapSeedPasswords();
+  bootstrapAdminPassword();
+  await saveStore();
+  console.log(`[admin] Created ${store.accounts.length} MySQL accounts. Administrator: ${adminEmail}`);
 }
 
 function audit(by, action, detail) {
@@ -384,17 +446,17 @@ function buildMessage({ kind, event, stage, record, remarks }) {
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
-export function createApiRouter() {
-  initStore();
+export async function createApiRouter(db) {
+  await initStore(db);
   const router = express.Router();
-  const json = express.json({ limit: '100kb' });
+  const json = express.json({ limit: '20mb' });
 
   // CORS for these routes only (adds Authorization + PUT/PATCH; /api/dtms keeps its own rules).
   const allowed = new Set([
     process.env.APP_ORIGIN,
     ...String(process.env.APP_ORIGINS || '').split(',')
   ].map((o) => String(o || '').trim().replace(/\/$/, '')).filter(Boolean));
-  router.use(['/auth', '/admin', '/flow', '/notify'], (req, res, next) => {
+  router.use(['/auth', '/admin', '/flow', '/notify', '/data', '/files'], (req, res, next) => {
     const origin = req.headers.origin;
     if (origin && allowed.has(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
@@ -418,6 +480,16 @@ export function createApiRouter() {
   const adminOnly = (req, res, next) => (
     req.account.type === 'admin' ? next() : res.status(403).json({ error: 'Administrator access required.' })
   );
+  const persistStore = async (res) => {
+    try {
+      await saveStore();
+      return true;
+    } catch (error) {
+      console.error('[admin] MySQL write failed:', error);
+      res.status(503).json({ error: 'Could not save server settings. Please try again.' });
+      return false;
+    }
+  };
 
   // --- login (with a small brute-force lock)
   const attempts = new Map();
@@ -442,7 +514,7 @@ export function createApiRouter() {
 
   router.get('/auth/me', auth, (req, res) => res.json({ user: toUser(req.account) }));
 
-  router.post('/auth/change-password', auth, json, (req, res) => {
+  router.post('/auth/change-password', auth, json, async (req, res) => {
     const { current, next } = req.body || {};
     if (!verifyPassword(String(current || ''), req.account.passwordHash)) {
       return res.status(400).json({ error: 'Current password is incorrect.' });
@@ -453,7 +525,7 @@ export function createApiRouter() {
     req.account.mustChangePassword = false;
     req.account.updatedAt = Date.now();
     audit(req.account, 'password.change', req.account.email);
-    saveStore();
+    if (!(await persistStore(res))) return;
     return res.json({ user: toUser(req.account) });
   });
 
@@ -500,7 +572,7 @@ export function createApiRouter() {
 
   const activeAdmins = (excludeId) => store.accounts.filter((a) => a.type === 'admin' && a.active !== false && a.id !== excludeId).length;
 
-  router.post('/admin/accounts', auth, adminOnly, json, (req, res) => {
+  router.post('/admin/accounts', auth, adminOnly, json, async (req, res) => {
     const errors = [];
     const fields = readAccountFields(req.body || {}, null, errors);
     const password = String(req.body?.password || '');
@@ -514,11 +586,11 @@ export function createApiRouter() {
     if (store.accounts.some((a) => a.id === acct.id)) acct.id = `${fields.email}#${now}`;
     store.accounts.push(acct);
     audit(req.account, 'account.create', `${acct.email} (${acct.type})`);
-    saveStore();
+    if (!(await persistStore(res))) return;
     return res.status(201).json({ account: toUser(acct) });
   });
 
-  router.patch('/admin/accounts/:id', auth, adminOnly, json, (req, res) => {
+  router.patch('/admin/accounts/:id', auth, adminOnly, json, async (req, res) => {
     const acct = store.accounts.find((a) => a.id === req.params.id);
     if (!acct) return res.status(404).json({ error: 'Account not found.' });
     const body = req.body || {};
@@ -543,11 +615,11 @@ export function createApiRouter() {
     if ((acct.active !== false) !== nextActive) changes.push(nextActive ? 'activated' : 'deactivated');
     Object.assign(acct, fields, { active: nextActive, updatedAt: Date.now() });
     audit(req.account, 'account.update', `${acct.email}: ${changes.join('; ') || 'details updated'}`);
-    saveStore();
+    if (!(await persistStore(res))) return;
     return res.json({ account: toUser(acct) });
   });
 
-  router.post('/admin/accounts/:id/reset-password', auth, adminOnly, json, (req, res) => {
+  router.post('/admin/accounts/:id/reset-password', auth, adminOnly, json, async (req, res) => {
     const acct = store.accounts.find((a) => a.id === req.params.id);
     if (!acct) return res.status(404).json({ error: 'Account not found.' });
     const password = String(req.body?.password || '');
@@ -556,19 +628,19 @@ export function createApiRouter() {
     acct.mustChangePassword = true;
     acct.updatedAt = Date.now();
     audit(req.account, 'account.reset-password', acct.email);
-    saveStore();
+    if (!(await persistStore(res))) return;
     return res.json({ ok: true });
   });
 
   // --- admin: flow
-  router.put('/admin/flow', auth, adminOnly, json, (req, res) => {
+  router.put('/admin/flow', auth, adminOnly, json, async (req, res) => {
     const errors = [];
     const flow = sanitizeFlow(req.body?.flow, errors);
     if (errors.length) return res.status(400).json({ error: errors.join(' ') });
     store.flow = flow;
     store.version += 1;
     audit(req.account, 'flow.update', `version ${store.version}`);
-    saveStore();
+    if (!(await persistStore(res))) return;
     return res.json({ flow: store.flow, version: store.version });
   });
 
@@ -621,6 +693,186 @@ export function createApiRouter() {
     } catch (err) {
       console.warn('[notify] failed:', err?.message || err);
       return res.json({ ok: false });
+    }
+  });
+
+  router.get('/data', auth, async (_req, res) => {
+    try {
+      const [[stateRows], [ppmp], [app]] = await Promise.all([
+        db.execute('SELECT state_value FROM system_state WHERE state_key = ?', ['data']),
+        db.execute('SELECT record_json FROM procurement_records WHERE collection_name = ? ORDER BY position', [RECORD_COLLECTION]),
+        db.execute('SELECT record_json FROM procurement_records WHERE collection_name = ? ORDER BY position', [APP_COLLECTION])
+      ]);
+      return res.json({
+        initialized: !!(stateRows[0] && parseJson(stateRows[0].state_value)?.initialized),
+        procurement_records: ppmp.map(({ record_json }) => parseJson(record_json)),
+        app_records: app.map(({ record_json }) => parseJson(record_json))
+      });
+    } catch (error) {
+      console.error('[data] MySQL read failed:', error);
+      return res.status(503).json({ error: 'Could not load procurement records.' });
+    }
+  });
+
+  const insertRecords = async (connection, name, values, startPosition = 0) => {
+    for (let offset = 0; offset < values.length; offset += 500) {
+      const batch = values.slice(offset, offset + 500);
+      const placeholders = batch.map(() => '(?, ?, ?, ?)').join(', ');
+      const params = batch.flatMap((record, index) => [
+        name, record.id, startPosition + offset + index, JSON.stringify(record.value)
+      ]);
+      await connection.execute(
+        `INSERT INTO procurement_records (collection_name, record_id, position, record_json)
+         VALUES ${placeholders}
+         ON DUPLICATE KEY UPDATE record_json = VALUES(record_json)`,
+        params
+      );
+    }
+  };
+
+  const replaceRecords = async (connection, name, values) => {
+    if (!Array.isArray(values)) throw new Error('Records must be an array.');
+    const ids = new Set();
+    for (const value of values) {
+      if (!value || typeof value !== 'object' || Array.isArray(value) || value.id == null) {
+        throw new Error('Each record must be an object with an id.');
+      }
+      const id = String(value.id);
+      if (!id || ids.has(id)) throw new Error('Record ids must be unique.');
+      ids.add(id);
+    }
+    await connection.execute('DELETE FROM procurement_records WHERE collection_name = ?', [name]);
+    await insertRecords(connection, name, values.map((value) => ({ id: String(value.id), value })));
+  };
+
+  router.post('/data/initialize', auth, json, async (req, res) => {
+    let connection;
+    let transactionStarted = false;
+    try {
+      connection = await db.getConnection();
+      await connection.beginTransaction();
+      transactionStarted = true;
+      const [stateRows] = await connection.execute(
+        'SELECT state_value FROM system_state WHERE state_key = ? FOR UPDATE',
+        ['data']
+      );
+      if (stateRows[0] && parseJson(stateRows[0].state_value)?.initialized) {
+        await connection.rollback();
+        transactionStarted = false;
+        return res.status(409).json({ error: 'Shared data is already initialized.' });
+      }
+      await replaceRecords(connection, RECORD_COLLECTION, req.body?.procurement_records || []);
+      await replaceRecords(connection, APP_COLLECTION, req.body?.app_records || []);
+      await connection.execute(
+        `INSERT INTO system_state (state_key, state_value) VALUES ('data', ?)
+         ON DUPLICATE KEY UPDATE state_value = VALUES(state_value)`,
+        [JSON.stringify({ initialized: true, initializedAt: Date.now() })]
+      );
+      await connection.commit();
+      transactionStarted = false;
+      return res.json({ ok: true });
+    } catch (error) {
+      if (transactionStarted) await connection.rollback();
+      console.error('[data] Initial migration failed:', error);
+      return res.status(400).json({ error: error.message || 'Could not migrate local records.' });
+    } finally {
+      if (connection) connection.release();
+    }
+  });
+
+  router.patch('/data/:collection', auth, json, async (req, res) => {
+    const name = req.params.collection === 'procurement_records' ? RECORD_COLLECTION
+      : req.params.collection === 'app_records' ? APP_COLLECTION : null;
+    if (!name) return res.status(404).json({ error: 'Unknown record collection.' });
+    let connection;
+    let transactionStarted = false;
+    try {
+      connection = await db.getConnection();
+      const upsert = req.body?.upsert;
+      const deleted = req.body?.deleted;
+      if (!Array.isArray(upsert) || !Array.isArray(deleted)) {
+        return res.status(400).json({ error: 'Invalid record changes.' });
+      }
+      const ids = new Set();
+      const recordsToUpsert = upsert.map((value) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value) || value.id == null) {
+          throw new Error('Each record must be an object with an id.');
+        }
+        const id = String(value.id);
+        if (!id || ids.has(id)) throw new Error('Record ids must be unique.');
+        ids.add(id);
+        return { id, value };
+      });
+      await connection.beginTransaction();
+      transactionStarted = true;
+      const [[positionRow]] = await connection.execute(
+        'SELECT COALESCE(MAX(position), -1) AS max_position FROM procurement_records WHERE collection_name = ?',
+        [name]
+      );
+      await insertRecords(connection, name, recordsToUpsert, Number(positionRow.max_position) + 1);
+      const deleteIds = [...new Set(deleted.map(String))];
+      if (deleteIds.length) {
+        await connection.execute(
+          `DELETE FROM procurement_records WHERE collection_name = ? AND record_id IN (${deleteIds.map(() => '?').join(',')})`,
+          [name, ...deleteIds]
+        );
+      }
+      await connection.execute(
+        `INSERT INTO system_state (state_key, state_value) VALUES ('data', ?)
+         ON DUPLICATE KEY UPDATE state_value = VALUES(state_value)`,
+        [JSON.stringify({ initialized: true, initializedAt: Date.now() })]
+      );
+      await connection.commit();
+      transactionStarted = false;
+      return res.json({ ok: true });
+    } catch (error) {
+      if (transactionStarted) await connection.rollback();
+      console.error('[data] MySQL write failed:', error);
+      return res.status(400).json({ error: error.message || 'Could not save procurement records.' });
+    } finally {
+      if (connection) connection.release();
+    }
+  });
+
+  router.put('/files/:id', auth, express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
+    const id = String(req.params.id || '');
+    if (!/^[\w.-]{1,128}$/.test(id) || !Buffer.isBuffer(req.body)) {
+      return res.status(400).json({ error: 'Invalid file upload.' });
+    }
+    try {
+      await db.execute(
+        `INSERT INTO uploads (file_id, content_type, data) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE content_type = VALUES(content_type), data = VALUES(data)`,
+        [id, req.headers['content-type'] || 'application/octet-stream', req.body]
+      );
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('[files] MySQL write failed:', error);
+      return res.status(503).json({ error: 'Could not store the uploaded file.' });
+    }
+  });
+
+  router.get('/files/:id', auth, async (req, res) => {
+    const id = String(req.params.id || '');
+    try {
+      const [rows] = await db.execute('SELECT content_type, data FROM uploads WHERE file_id = ?', [id]);
+      if (!rows.length) return res.status(404).json({ error: 'File not found.' });
+      res.setHeader('Content-Type', rows[0].content_type || 'application/octet-stream');
+      res.setHeader('Content-Length', rows[0].data.length);
+      return res.send(rows[0].data);
+    } catch (error) {
+      console.error('[files] MySQL read failed:', error);
+      return res.status(503).json({ error: 'Could not load the uploaded file.' });
+    }
+  });
+
+  router.delete('/files/:id', auth, async (req, res) => {
+    try {
+      await db.execute('DELETE FROM uploads WHERE file_id = ?', [String(req.params.id)]);
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('[files] MySQL delete failed:', error);
+      return res.status(503).json({ error: 'Could not delete the uploaded file.' });
     }
   });
 

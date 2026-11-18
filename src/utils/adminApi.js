@@ -5,6 +5,8 @@ export const API_BASE = import.meta.env?.VITE_API_BASE || DTMS_PROXY.replace(/\/
 
 const TOKEN_KEY = 'dashboard_token';
 const FLOW_KEY = 'flow_config_cache';
+const RECORD_KEYS = new Set(['procurement_records', 'app_records']);
+const syncedRecords = new Map();
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
 export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
@@ -36,6 +38,142 @@ async function api(path, { method = 'GET', body } = {}) {
   if (!res.ok) throw new ApiError(data.error || `Request failed (${res.status}).`, res.status);
   return data;
 }
+
+let suppressRecordSync = false;
+const pendingSync = new Map();
+const syncQueues = new Map();
+const activeSync = new Set();
+const originalSetItem = Storage.prototype.setItem;
+Storage.prototype.setItem = function setItem(key, value) {
+  originalSetItem.call(this, key, value);
+  if (this === window.localStorage && RECORD_KEYS.has(key) && getToken() && !suppressRecordSync) {
+    const pending = pendingSync.get(key);
+    if (pending) clearTimeout(pending);
+    pendingSync.set(key, setTimeout(() => {
+      pendingSync.delete(key);
+      let records;
+      try {
+        records = JSON.parse(localStorage.getItem(key) || '[]');
+        if (!Array.isArray(records)) throw new Error('Expected an array of records.');
+      } catch (error) {
+        window.dispatchEvent(new CustomEvent('persistence-error', {
+          detail: { message: `Could not save ${key}: ${error.message}` }
+        }));
+        return;
+      }
+      const previousRecords = syncedRecords.get(key) || [];
+      const currentById = new Map(records.map((record) => [String(record.id), record]));
+      const previousById = new Map(previousRecords.map((record) => [String(record.id), record]));
+      const upsert = records.filter((record) =>
+        JSON.stringify(previousById.get(String(record.id))) !== JSON.stringify(record));
+      const deleted = previousRecords
+        .filter((record) => !currentById.has(String(record.id)))
+        .map((record) => String(record.id));
+      if (!upsert.length && !deleted.length) return;
+      const previous = syncQueues.get(key) || Promise.resolve();
+      activeSync.add(key);
+      const next = previous.catch(() => {}).then(async () => {
+        await api(`/data/${key}`, { method: 'PATCH', body: { upsert, deleted } });
+        syncedRecords.set(key, records);
+      }).finally(() => activeSync.delete(key));
+      syncQueues.set(key, next);
+      next.catch((error) => {
+        console.error(`Could not save ${key} to the shared database:`, error);
+        window.dispatchEvent(new CustomEvent('persistence-error', {
+          detail: { message: 'Your changes are on this device but could not be saved to the shared database.' }
+        }));
+      });
+    }, 200));
+  }
+};
+
+function setCachedRecords(data) {
+  suppressRecordSync = true;
+  try {
+    originalSetItem.call(localStorage, 'procurement_records', JSON.stringify(data.procurement_records || []));
+    originalSetItem.call(localStorage, 'app_records', JSON.stringify(data.app_records || []));
+    syncedRecords.set('procurement_records', data.procurement_records || []);
+    syncedRecords.set('app_records', data.app_records || []);
+  } finally {
+    suppressRecordSync = false;
+  }
+}
+
+export async function initializeRemoteData() {
+  let data = await api('/data');
+  const firstLogin = !data.initialized;
+  if (!data.initialized) {
+    const localData = {
+      procurement_records: JSON.parse(localStorage.getItem('procurement_records') || '[]'),
+      app_records: JSON.parse(localStorage.getItem('app_records') || '[]')
+    };
+    try {
+      await api('/data/initialize', { method: 'POST', body: localData });
+    } catch (error) {
+      if (error.status !== 409) throw error;
+    }
+    data = await api('/data');
+  }
+  setCachedRecords(data);
+  return { ...data, migrateLegacyFiles: firstLogin };
+}
+
+export async function refreshRemoteData(shouldApply = () => true) {
+  if (pendingSync.size || activeSync.size || !syncedRecords.size) return false;
+  const localRecords = Object.fromEntries([...RECORD_KEYS].map((key) => {
+    let value = [];
+    try { value = JSON.parse(localStorage.getItem(key) || '[]'); } catch { /* handled by regular sync */ }
+    return [key, value];
+  }));
+  if ([...RECORD_KEYS].some((key) =>
+    JSON.stringify(localRecords[key]) !== JSON.stringify(syncedRecords.get(key)))) return false;
+
+  let data;
+  try {
+    data = await api('/data');
+  } catch (error) {
+    window.dispatchEvent(new CustomEvent('persistence-error', {
+      detail: { message: 'Could not refresh shared records from the server database. Check the server connection.' }
+    }));
+    throw error;
+  }
+  if (!shouldApply() || [...RECORD_KEYS].some((key) => {
+    let current = [];
+    try { current = JSON.parse(localStorage.getItem(key) || '[]'); } catch { return true; }
+    return JSON.stringify(current) !== JSON.stringify(syncedRecords.get(key));
+  })) return false;
+  const changed = [...RECORD_KEYS].some((key) =>
+    JSON.stringify(data[key]) !== JSON.stringify(syncedRecords.get(key)));
+  if (!changed) return false;
+  setCachedRecords(data);
+  return true;
+}
+
+async function fileRequest(id, options = {}) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/files/${encodeURIComponent(id)}`, {
+      ...options,
+      headers: {
+        ...(options.body ? { 'Content-Type': options.body.type || 'application/octet-stream' } : {}),
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+        ...(options.headers || {})
+      }
+    });
+  } catch {
+    throw new ApiError('Cannot reach the server. Make sure it is running.', 0);
+  }
+  if (!response.ok) {
+    let data = {};
+    try { data = await response.json(); } catch { /* empty body */ }
+    throw new ApiError(data.error || `File request failed (${response.status}).`, response.status);
+  }
+  return response;
+}
+
+export const apiGetFile = async (id) => (await fileRequest(id)).blob();
+export const apiPutFile = (id, blob) => fileRequest(id, { method: 'PUT', body: blob });
+export const apiDeleteFile = (id) => fileRequest(id, { method: 'DELETE' });
 
 // --- session
 export const apiLogin = (email, password) => api('/auth/login', { method: 'POST', body: { email, password } });

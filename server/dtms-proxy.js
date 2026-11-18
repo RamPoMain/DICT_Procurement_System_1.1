@@ -5,6 +5,7 @@
 import express from 'express';
 import multer from 'multer';
 import { createApiRouter } from './admin-api.js';
+import { connectMySql } from './mysql-store.js';
 
 const {
   DTMS_BASE_URL, DTMS_API_KEY, DTMS_ORIGIN, PORT = 3001,
@@ -12,13 +13,11 @@ const {
   APP_ORIGINS = '',
   TESTER_ORIGIN = 'http://127.0.0.1:5500'   // where Live Server opens index.html
 } = process.env;
-if (!DTMS_BASE_URL || !DTMS_API_KEY || !DTMS_ORIGIN) {
-  console.error('Missing DTMS_BASE_URL, DTMS_API_KEY or DTMS_ORIGIN in .env');
-  process.exit(1);
-}
-const BASE = DTMS_BASE_URL.replace(/\/?$/, '/') + 'document/public/';
-console.log('Sending origin:', JSON.stringify(DTMS_ORIGIN));
-const dtmsHeaders = { 'X-API-Token': DTMS_API_KEY, Origin: DTMS_ORIGIN };
+const DTMS_CONFIGURED = !!(DTMS_BASE_URL && DTMS_API_KEY && DTMS_ORIGIN);
+const BASE = DTMS_CONFIGURED ? DTMS_BASE_URL.replace(/\/?$/, '/') + 'document/public/' : '';
+if (DTMS_CONFIGURED) console.log('Sending origin:', JSON.stringify(DTMS_ORIGIN));
+else console.warn('DTMS is not configured; DTMS routes will return 503.');
+const dtmsHeaders = DTMS_CONFIGURED ? { 'X-API-Token': DTMS_API_KEY, Origin: DTMS_ORIGIN } : {};
 const ALLOWED = new Set(
   [APP_ORIGIN, APP_ORIGINS, TESTER_ORIGIN]
     .flatMap((origins) => origins.split(','))
@@ -28,8 +27,6 @@ const ALLOWED = new Set(
 console.log('Allowed browser origins:', [...ALLOWED].join(', '));
 
 const app = express();
-
-app.use('/api', createApiRouter());
 
 // Log every request
 app.use((req, res, next) => {
@@ -45,7 +42,7 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'Content-Type');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -70,6 +67,7 @@ async function forward(res, url, options = {}) {
 
 // ---- Used by the PPMP app (dtmsClient.js) ----
 app.post('/api/dtms/submit', upload.fields([{ name: 'files' }, { name: 'supporting_files' }]), (req, res) => {
+  if (!DTMS_CONFIGURED) return res.status(503).json({ detail: 'DTMS is not configured on the server.' });
   const form = new FormData();
   for (const k of ['title', 'requestor', 'position', 'message', 'signatories']) {
     if (req.body[k] != null) form.append(k, req.body[k]);
@@ -83,19 +81,23 @@ app.post('/api/dtms/submit', upload.fields([{ name: 'files' }, { name: 'supporti
 });
 
 app.get('/api/dtms/signatories', (req, res) =>
-  forward(res, BASE + 'signatories/?' + new URLSearchParams(req.query)));
+  DTMS_CONFIGURED ? forward(res, BASE + 'signatories/?' + new URLSearchParams(req.query))
+    : res.status(503).json({ detail: 'DTMS is not configured on the server.' }));
 
 app.get('/api/dtms/status/:track', (req, res) =>
-  forward(res, BASE + 'documents/' + encodeURIComponent(req.params.track) + '/'));
+  DTMS_CONFIGURED ? forward(res, BASE + 'documents/' + encodeURIComponent(req.params.track) + '/')
+    : res.status(503).json({ detail: 'DTMS is not configured on the server.' }));
 
 app.get('/api/dtms/files/:track/:id', (req, res) =>
-  forward(res, BASE + `documents/${encodeURIComponent(req.params.track)}/files/${encodeURIComponent(req.params.id)}/?inline=1`));
+  DTMS_CONFIGURED ? forward(res, BASE + `documents/${encodeURIComponent(req.params.track)}/files/${encodeURIComponent(req.params.id)}/?inline=1`)
+    : res.status(503).json({ detail: 'DTMS is not configured on the server.' }));
 
 // ---- Used by the index.html tester ----
 // In the tester set API base URL to  http://localhost:3001/api/v1/
 // Requests to /api/v1/document/public/... are passed on to DTMS with the key and origin
 // from .env (whatever key the tester sends is ignored). Development use only.
 app.use('/api/v1/document/public', express.raw({ type: () => true, limit: '30mb' }), (req, res) => {
+  if (!DTMS_CONFIGURED) return res.status(503).json({ detail: 'DTMS is not configured on the server.' });
   const rest = req.originalUrl.replace(/^\/api\/v1\/document\/public\/?/, '');
   const headers = {};
   if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'];
@@ -103,4 +105,19 @@ app.use('/api/v1/document/public', express.raw({ type: () => true, limit: '30mb'
   forward(res, BASE + rest, { method: req.method, headers, body: hasBody ? req.body : undefined });
 });
 
-app.listen(PORT, () => console.log(`DTMS proxy on http://localhost:${PORT} -> ${BASE}`));
+async function start() {
+  const db = await connectMySql();
+  app.use('/api', await createApiRouter(db));
+  const server = app.listen(PORT, () => console.log(`Procurement API on http://localhost:${PORT}`));
+  const close = async () => {
+    server.close();
+    await db.end();
+  };
+  process.once('SIGINT', close);
+  process.once('SIGTERM', close);
+}
+
+start().catch((error) => {
+  console.error('[startup] Could not connect to MySQL:', error.message);
+  process.exitCode = 1;
+});

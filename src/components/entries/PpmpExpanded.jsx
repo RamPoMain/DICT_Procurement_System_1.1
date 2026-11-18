@@ -684,7 +684,13 @@ export default function PpmpExpanded({
       const fileId = newFileId();
       Promise.resolve(putFile(fileId, file)).then(() => {
         setPending((p) => ({ count: p.count - 1, bytes: p.bytes - file.size }));
-        if (editSession.current !== session) { removeFile(fileId); return; }   // edit ended meanwhile
+        if (editSession.current !== session) {
+          removeFile(fileId).catch((error) => {
+            console.warn('Could not remove an abandoned upload:', error.message);
+            toast('An unused uploaded file could not be removed from the shared database.');
+          });
+          return;
+        }
         addedFiles.current.push(fileId);
         const doc = { name: file.name, size: file.size, type: file.type || '', fileId };
         setDraft((d) => d && ({
@@ -695,7 +701,7 @@ export default function PpmpExpanded({
         }));
       }).catch(() => {
         setPending((p) => ({ count: p.count - 1, bytes: p.bytes - file.size }));
-        toast(`"${file.name}" could not be stored in this browser (storage may be full). Please try again.`);
+        toast(`"${file.name}" could not be stored in the shared database. Please try again.`);
       });
     });
   };

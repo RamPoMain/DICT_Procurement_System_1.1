@@ -1,5 +1,5 @@
 // Supporting-document helpers for the Entries dropdown: open, download and
-// attach. File bytes live in IndexedDB (FileStore); the record only keeps a
+// attach. File bytes live in MySQL (FileStore); the record only keeps a
 // reference ({ name, size, type, fileId }). Older records may still hold a
 // base64 `dataUrl`, which FileStore.docBlob() also understands.
 //
@@ -19,9 +19,7 @@ export function formatFileSize(bytes) {
 
 export const newFileId = () => FileStore.newId();
 export const putFile = (id, file) => FileStore.put(id, file);
-export function removeFile(id) {
-  try { return FileStore.remove(id); } catch { return undefined; }
-}
+export const removeFile = (id) => FileStore.remove(id);
 
 async function resolveBlob(doc, toast) {
   if (!hasStoredContent(doc)) {

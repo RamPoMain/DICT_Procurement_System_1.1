@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -10,6 +10,29 @@ import Entries from './pages/Entries';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import ForcePasswordChange from './components/ForcePasswordChange';
+
+function PersistenceNotice() {
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    const show = (event) => {
+      setMessage(event.detail?.message || 'Could not save your changes to the shared database.');
+    };
+    window.addEventListener('persistence-error', show);
+    return () => window.removeEventListener('persistence-error', show);
+  }, []);
+  if (!message) return null;
+  return (
+    <div role="alert" style={{
+      position: 'fixed', zIndex: 10000, right: 16, bottom: 16, maxWidth: 420,
+      padding: '12px 16px', color: '#fff', background: '#9b1c1c', borderRadius: 6
+    }}>
+      {message}
+      <button type="button" onClick={() => setMessage('')} aria-label="Dismiss" style={{
+        marginLeft: 12, color: 'inherit', background: 'transparent', border: 0, cursor: 'pointer'
+      }}>Dismiss</button>
+    </div>
+  );
+}
 
 // Stylesheets (from your project)
 import './assets/styles/base.css';
@@ -59,6 +82,7 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
+          <PersistenceNotice />
           <ForcePasswordChange />
           <Routes>
             {/* Public Login Route */}

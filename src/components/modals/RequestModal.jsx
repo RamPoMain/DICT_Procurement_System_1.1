@@ -624,7 +624,7 @@ export default function RequestModal({ isOpen, onClose, recordId = null, onSaved
           supporting_documents: [...prev.supporting_documents, { name: file.name, size: file.size, type: file.type, fileId }]
         }));
       } catch {
-        setErrors(e => ({ ...e, supporting_documents: `The file "${file.name}" could not be stored in this browser (storage may be full).` }));
+        setErrors(e => ({ ...e, supporting_documents: `The file "${file.name}" could not be stored in the shared database. Please try again.` }));
       }
     }
   };

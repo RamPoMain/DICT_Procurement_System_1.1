@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   apiLogin, apiMe, getToken, setToken, clearToken,
-  refreshFlow, clearFlowCache
+  refreshFlow, clearFlowCache, initializeRemoteData
 } from '../utils/adminApi.js';
+import { migrateLegacyFiles } from '../utils/fileStore.js';
 
 // Accounts now live on the server (Admin page). Kept only so old imports do not break.
 export const ACCOUNTS = [];
@@ -40,8 +41,22 @@ export function AuthProvider({ children }) {
     if (!getToken()) return undefined;
     let cancelled = false;
     apiMe()
-      .then(({ user: fresh }) => { if (!cancelled) setUser(fresh); })
-      .catch((err) => { if (!cancelled && err.status === 401) logout(); });
+      .then(async ({ user: fresh }) => {
+        const data = await initializeRemoteData();
+        if (data.migrateLegacyFiles || localStorage.getItem('mongo_file_migration_pending')) {
+          localStorage.setItem('mongo_file_migration_pending', '1');
+          await migrateLegacyFiles(data);
+          localStorage.removeItem('mongo_file_migration_pending');
+        }
+        if (!cancelled) setUser(fresh);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err.status === 401) logout();
+        else window.dispatchEvent(new CustomEvent('persistence-error', {
+          detail: { message: 'Could not load shared records from the server database. Check the server connection and reload.' }
+        }));
+      });
     refreshFlow().catch(() => {});
     const onVisible = () => {
       if (document.visibilityState === 'visible' && getToken()) refreshFlow().catch(() => {});
@@ -59,10 +74,17 @@ export function AuthProvider({ children }) {
     try {
       const { token, user: signedIn } = await apiLogin(email.trim(), password);
       setToken(token);
+      const data = await initializeRemoteData();
+      if (data.migrateLegacyFiles || localStorage.getItem('mongo_file_migration_pending')) {
+        localStorage.setItem('mongo_file_migration_pending', '1');
+        await migrateLegacyFiles(data);
+        localStorage.removeItem('mongo_file_migration_pending');
+      }
       setUser(signedIn);
       refreshFlow().catch(() => {});
       return { ok: true, user: signedIn };
     } catch (err) {
+      clearToken();
       return { ok: false, error: err.message };
     }
   };

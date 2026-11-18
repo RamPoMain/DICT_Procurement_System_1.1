@@ -1,3 +1,5 @@
+import { apiDeleteFile, apiGetFile, apiPutFile } from './adminApi.js';
+
 const DB_NAME = 'dict_procurement_files';
 const STORE = 'files';
 const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -37,9 +39,21 @@ function run(mode, work) {
 
 export const FileStore = {
   newId: () => 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-  put: (id, blob) => run('readwrite', s => s.put(blob, id)),
-  get: (id) => run('readonly', s => s.get(id)),
-  remove: (id) => run('readwrite', s => s.delete(id)).catch(() => {}),
+  put: (id, blob) => apiPutFile(id, blob),
+  get: async (id) => {
+    try {
+      return await apiGetFile(id);
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      const legacy = await run('readonly', s => s.get(id));
+      if (legacy) {
+        await apiPutFile(id, legacy);
+        return legacy;
+      }
+      return null;
+    }
+  },
+  remove: (id) => apiDeleteFile(id),
   docBlob: async (doc) => {
     if (!doc) return null;
     if (doc.fileId) return (await FileStore.get(doc.fileId)) || null;
@@ -54,4 +68,24 @@ export const FileStore = {
     return null;
   }
 };
+
+export async function migrateLegacyFiles(records) {
+  const ids = new Set();
+  const visit = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+    } else if (value && typeof value === 'object') {
+      Object.entries(value).forEach(([key, child]) => {
+        if ((key === 'fileId' || key.endsWith('_file_id')) && typeof child === 'string') ids.add(child);
+        visit(child);
+      });
+    }
+  };
+  visit(records);
+  for (const id of ids) {
+    const blob = await run('readonly', (store) => store.get(id));
+    if (blob) await apiPutFile(id, blob);
+  }
+}
+
 export default FileStore;
