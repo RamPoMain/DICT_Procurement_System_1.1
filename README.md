@@ -98,7 +98,6 @@ cd DICT_Procurement_System
 2. Install dependencies:
 ```bash
 npm install
-npm --prefix server install
 ```
 
 3. Configure MySQL and the server:
@@ -139,6 +138,11 @@ npm run build
 To preview the production build locally:
 ```bash
 npm run preview
+```
+
+To run both server and project
+```bash
+npm --prefix server install nodemailer
 ```
 
 ---
